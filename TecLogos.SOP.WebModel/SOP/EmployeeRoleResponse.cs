@@ -12,7 +12,6 @@ namespace TecLogos.SOP.WebModel.SOP
         public string Description { get; set; }
 
     }
-
     public class RoleHistoryResponse
     {
         public Guid ID { get; set; }
@@ -23,9 +22,8 @@ namespace TecLogos.SOP.WebModel.SOP
         public Guid OldRoleID { get; set; }
         public string RoleName { get; set; }
         public string OldRoleName { get; set; }
-        public DateTime? OverridenOn { get; set; }
+        public DateTime? ChangedOn { get; set; }
         public string? Remarks { get; set; }
 
     }
-
 }

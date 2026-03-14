@@ -1,143 +1,189 @@
-using Microsoft.Extensions.Logging;
-using TecLogos.SOP.Common.Helpers;
+﻿using Microsoft.Extensions.Logging;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using TecLogos.SOP.AuthBAL;
+using TecLogos.SOP.BAL.Auth;
 using TecLogos.SOP.DAL.SOP;
-using TecLogos.SOP.WebModel.SOP;
 
 namespace TecLogos.SOP.BAL.SOP
 {
     public interface IEmployeeBAL
     {
-        Task<(int, List<EmployeeList>)> GetAll(int pageNumber, int pageSize, string term);
-        Task<Employee?> GetById(Guid id);
-        Task<Guid> Create(Employee employee, Guid createdByID);
-        Task<bool> Update(Employee employee, Guid modifiedByID);
+        Task<(int, List<WebModel.SOP.EmployeeList>)> GetAll(int pageNumber, int pageSize, string term);
+        Task<WebModel.SOP.Employee?> GetById(Guid id);
+        Task<Guid> Create(WebModel.SOP.Employee employee, Guid createdByID);
+        Task<bool> Update(WebModel.SOP.Employee employee, Guid modifiedByID);
         Task<bool> Delete(Guid id, Guid deletedByID);
     }
 
     public class EmployeeBAL : IEmployeeBAL
     {
         private readonly IEmployeeDAL _employeeDAL;
-        private readonly IAuthDAL _authDAL;
         private readonly ILogger<EmployeeBAL> _logger;
+        private readonly IUserContextBAL _userContext;
+        private readonly IAuthOnboardingBAL _onboarding;
 
-        public EmployeeBAL(IEmployeeDAL employeeDAL, IAuthDAL authDAL, ILogger<EmployeeBAL> logger)
+        public EmployeeBAL(IEmployeeDAL employeeDAL, ILogger<EmployeeBAL> logger, IUserContextBAL userContext, IAuthOnboardingBAL onboarding)
         {
             _employeeDAL = employeeDAL;
-            _authDAL = authDAL;
             _logger = logger;
+            _userContext = userContext;
+            _onboarding = onboarding;
+
         }
 
-        public async Task<(int, List<EmployeeList>)> GetAll(int pageNumber, int pageSize, string term)
+        // GET ALL
+        public async Task<(int, List<WebModel.SOP.EmployeeList>)> GetAll(int pageNumber, int pageSize, string term)
         {
-            var (total, employees) = await _employeeDAL.GetAll(pageNumber, pageSize, term);
-            return (total, employees.Select(e => new EmployeeList
+            var result = await _employeeDAL.GetAll(pageNumber, pageSize, term);
+            var dtos = new List<WebModel.SOP.EmployeeList>();
+
+            foreach (var employee in result.Item2)
             {
-                ID = e.ID,
-                FirstName = e.FirstName,
-                MiddleName = e.MiddleName,
-                LastName = e.LastName,
-                Email = e.Email,
-                MobileNumber = e.MobileNumber,
-                IsActive = e.IsActive
-            }).ToList());
+                dtos.Add(MapToResponseGetAll(employee));
+            }
+
+            return (result.Item1, dtos);
         }
 
-        public async Task<Employee?> GetById(Guid id)
+        // GET BY ID
+        public async Task<WebModel.SOP.Employee?> GetById(Guid id)
         {
-            var e = await _employeeDAL.GetById(id);
-            if (e == null) return null;
+            var employee = await _employeeDAL.GetById(id);
 
-            return new Employee
-            {
-                ID = e.ID,
-                FirstName = e.FirstName,
-                MiddleName = e.MiddleName,
-                LastName = e.LastName,
-                Email = e.Email,
-                MobileNumber = e.MobileNumber,
-                RoleID = e.RoleID,
-                Version = e.Version,
-                IsActive = e.IsActive,
-                IsDeleted = e.IsDeleted,
-                Created = e.Created,
-                CreatedByID = e.CreatedByID,
-                Modified = e.Modified,
-                ModifiedByID = e.ModifiedByID ?? Guid.Empty,
-                Deleted = e.Deleted,
-                DeletedByID = e.DeletedByID ?? Guid.Empty
-            };
+            if (employee == null)
+                return null;
+            return MapToResponseDto(employee);
         }
 
-        public async Task<Guid> Create(Employee dto, Guid createdByID)
+        // CREATE
+        public async Task<Guid> Create(WebModel.SOP.Employee employee, Guid createdByID)
         {
-            if (string.IsNullOrWhiteSpace(dto.FirstName))
-                throw new ArgumentException("First Name is required.");
-            if (string.IsNullOrWhiteSpace(dto.Email))
-                throw new ArgumentException("Email is required.");
-            if (await _employeeDAL.IsEmployeeEmailExists(dto.Email))
-                throw new InvalidOperationException($"Email '{dto.Email}' already exists.");
+          
+            if (string.IsNullOrWhiteSpace(employee.FirstName))
+                throw new ArgumentException("First Name is required");
 
-            var dm = new TecLogos.SOP.DataModel.SOP.Employee
+            if (string.IsNullOrWhiteSpace(employee.Email))
+                throw new ArgumentException("Email is required");
+
+            if (await _employeeDAL.IsEmployeeEmailExists(employee.Email))
+                throw new InvalidOperationException($"Employee Email '{employee.Email}' already exists");
+
+            var employeeDM = new DataModel.SOP.Employee
             {
                 ID = Guid.NewGuid(),
-                FirstName = dto.FirstName,
-                MiddleName = dto.MiddleName,
-                LastName = dto.LastName,
-                Email = dto.Email,
-                MobileNumber = dto.MobileNumber,
-                RoleID = dto.RoleID == Guid.Empty ? null : dto.RoleID,
+                FirstName = employee.FirstName,
+                MiddleName = employee.MiddleName,
+                LastName = employee.LastName,
+                Email = employee.Email,
+                MobileNumber = employee.MobileNumber,
+               
+                RoleID = employee.RoleID == Guid.Empty ? null : employee.RoleID,
                 IsActive = true,
                 IsDeleted = false,
+                Created = DateTime.UtcNow,
                 CreatedByID = createdByID
             };
 
-            var employeeId = await _employeeDAL.Create(dm);
+        
 
-            // Auto-create AuthManager record + send onboarding invite
-            var tempHash = PasswordHasher.Hash("Welcome@123"); // placeholder until onboarding
-            var token = PasswordHasher.GenerateToken(32);
-            await _authDAL.CreateOnboardingInviteAsync(
-                employeeId, token, DateTime.UtcNow.AddDays(7), createdByID);
+            // Save employee
+            var employeeId = await _employeeDAL.Create(employeeDM);
 
-            _logger.LogInformation("Employee created: {ID}, onboarding invite token: {Token}", employeeId, token);
-            // TODO: Send email with token link
+            // Auto send onboarding invite 🔥
+            await _onboarding.SendInvite(employeeId, createdByID);
 
+            // Return new employee ID
             return employeeId;
         }
 
-        public async Task<bool> Update(Employee dto, Guid modifiedByID)
+        // UPDATE
+        public async Task<bool> Update(WebModel.SOP.Employee dto, Guid modifiedByID)
         {
-            if (dto.ID == Guid.Empty) throw new ArgumentException("Invalid Employee ID.");
+            if (dto.ID == Guid.Empty)
+                throw new ArgumentException("Invalid Employee ID.");
 
-            var existing = await _employeeDAL.GetById(dto.ID);
-            if (existing == null) throw new ArgumentException($"Employee {dto.ID} not found.");
+            var existingEmployee = await _employeeDAL.GetById(dto.ID);
+            if (existingEmployee == null)
+                throw new ArgumentException($"Employee with ID {dto.ID} not found.");
 
-            var dm = new TecLogos.SOP.DataModel.SOP.Employee
+            var employee = new DataModel.SOP.Employee
             {
                 ID = dto.ID,
+               
                 FirstName = dto.FirstName,
                 MiddleName = dto.MiddleName,
                 LastName = dto.LastName,
                 Email = dto.Email,
                 MobileNumber = dto.MobileNumber,
+               
                 RoleID = dto.RoleID == Guid.Empty ? null : dto.RoleID,
                 Version = dto.Version,
                 IsActive = dto.IsActive,
                 ModifiedByID = modifiedByID
             };
 
-            var success = await _employeeDAL.Update(dm);
+         
+
+            var success = await _employeeDAL.Update(employee);
+
             if (!success)
-                throw new Common.Exceptions.ConcurrencyException("Employee was modified by another user. Please reload.");
+                throw new Common.Exceptions.ConcurrencyException(
+                    "Employee was modified by another user. Please reload.");
 
             return true;
         }
 
+        // DELETE
         public async Task<bool> Delete(Guid id, Guid deletedByID)
         {
             var result = await _employeeDAL.Delete(id, deletedByID);
-            _logger.LogInformation("Employee soft-deleted: {ID}", id);
+            _logger.LogInformation($"Employee deleted (soft delete) with ID: {id}");
             return result;
+        }
+
+        private WebModel.SOP.EmployeeList MapToResponseGetAll(TecLogos.SOP.DataModel.SOP.EmployeeList employee)
+        {
+            return new WebModel.SOP.EmployeeList
+            {
+                ID = employee.ID,
+              
+                FirstName = employee.FirstName,
+                MiddleName = employee.MiddleName,
+                LastName = employee.LastName,
+                Email = employee.Email,
+                MobileNumber = employee.MobileNumber,
+               
+                IsActive = employee.IsActive,
+            };
+        }
+
+        private WebModel.SOP.Employee MapToResponseDto(TecLogos.SOP.DataModel.SOP.Employee employee)
+        {
+            return new WebModel.SOP.Employee
+            {
+                ID = employee.ID,
+              
+                FirstName = employee.FirstName,
+                MiddleName = employee.MiddleName,
+                LastName = employee.LastName,
+                Email = employee.Email,
+                MobileNumber = employee.MobileNumber,
+               
+                RoleID = employee.RoleID,
+                Version = employee.Version,
+                IsActive = employee.IsActive,
+                IsDeleted = employee.IsDeleted,
+                Created = employee.Created ?? default(DateTime),
+                CreatedByID = employee.CreatedByID ?? Guid.Empty,
+                Modified = employee.Modified,
+                ModifiedByID = employee.ModifiedByID ?? Guid.Empty,
+                Deleted = employee.Deleted,
+                DeletedByID = employee.DeletedByID ?? Guid.Empty,
+
+            
+            };
         }
     }
 }

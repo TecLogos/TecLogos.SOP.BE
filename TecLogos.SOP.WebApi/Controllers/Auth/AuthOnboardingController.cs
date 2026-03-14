@@ -18,8 +18,8 @@ namespace TecLogos.SOP.WebApi.Controllers.Auth
             _BAL = BAL;
         }
 
-        // ADMIN ONLY 
-        [Authorize(Roles = "Admin")]
+        // HR ONLY 
+        [Authorize(Roles = "Admin,HRAdmin")]
         [HttpPost("send-invite/{employeeId}")]
         public async Task<IActionResult> SendInvite(Guid employeeId)
         {

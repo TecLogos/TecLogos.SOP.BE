@@ -1,15 +1,17 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using TecLogos.SOP.DAL.SOP;
+using Web = TecLogos.SOP.WebModel.SOP;
+using Data = TecLogos.SOP.DataModel.SOP;
 
 namespace TecLogos.SOP.BAL.SOP
 {
     public interface IEmployeeGroupBAL
     {
-        Task<List<WebModel.SOP.EmployeeGroup>> GetAll();
-        Task<WebModel.SOP.EmployeeGroup?> Get(Guid id);
-        Task<Guid> Create(WebModel.SOP.EmployeeGroup model, Guid userId);
-        Task<bool> Update(WebModel.SOP.EmployeeGroup model, Guid userId);
-        Task<bool> Delete(Guid id, Guid userId);
+        Task<List<Web.EmployeeGroup>> GetAll();
+        Task<Web.EmployeeGroup?> Get(Guid id);
+        Task<Guid> Create(Web.EmployeeGroup lag, Guid u);
+        Task<bool> Update(Web.EmployeeGroup lag, Guid u);
+        Task<bool> Delete(Guid id, Guid u);
     }
 
     public class EmployeeGroupBAL : IEmployeeGroupBAL
@@ -17,46 +19,67 @@ namespace TecLogos.SOP.BAL.SOP
         private readonly IEmployeeGroupDAL _dal;
         private readonly ILogger<EmployeeGroupBAL> _logger;
 
-        public EmployeeGroupBAL(IEmployeeGroupDAL dal, ILogger<EmployeeGroupBAL> logger)
+        public EmployeeGroupBAL(
+            IEmployeeGroupDAL dal,
+            ILogger<EmployeeGroupBAL> logger)
         {
             _dal = dal;
             _logger = logger;
         }
 
-        public async Task<List<WebModel.SOP.EmployeeGroup>> GetAll()
+        // GET ALL
+        public async Task<List<Web.EmployeeGroup>> GetAll()
         {
-            var data = await _dal.GetAll();
-            return data.Select(MapToWeb).ToList();
+            var dataList = await _dal.GetAll();
+
+            return dataList.Select(MapToWeb).ToList();
         }
 
-        public async Task<WebModel.SOP.EmployeeGroup?> Get(Guid id)
+        // GET BY ID
+        public async Task<Web.EmployeeGroup?> Get(Guid id)
         {
             var data = await _dal.GetById(id);
-            return data == null ? null : MapToWeb(data);
+            if (data == null) return null;
+
+            return MapToWeb(data);
         }
 
-        public async Task<Guid> Create(WebModel.SOP.EmployeeGroup model, Guid userId)
+        // CREATE
+        public async Task<Guid> Create(Web.EmployeeGroup model, Guid userId)
         {
-            return await _dal.Create(MapToData(model), userId);
+            var data = MapToData(model);
+            return await _dal.Create(data, userId);
         }
 
-        public async Task<bool> Update(WebModel.SOP.EmployeeGroup model, Guid userId)
+        // UPDATE
+        public async Task<bool> Update(Web.EmployeeGroup model, Guid userId)
         {
-            return await _dal.Update(MapToData(model), userId);
+            var data = MapToData(model);
+            return await _dal.Update(data, userId);
         }
 
-        public Task<bool> Delete(Guid id, Guid userId) => _dal.Delete(id, userId);
+        // DELETE (no mapping needed)
+        public Task<bool> Delete(Guid id, Guid userId)
+            => _dal.Delete(id, userId);
 
-        private static WebModel.SOP.EmployeeGroup MapToWeb(DataModel.SOP.EmployeeGroup d) => new()
-        {
-            ID = d.ID,
-            Name = d.Name
-        };
+        // MAPPING FUNCTIONS
 
-        private static DataModel.SOP.EmployeeGroup MapToData(WebModel.SOP.EmployeeGroup w) => new()
+        private static Web.EmployeeGroup MapToWeb(Data.EmployeeGroup d)
         {
-            ID = w.ID,
-            Name = w.Name
-        };
+            return new Web.EmployeeGroup
+            {
+                ID = d.ID,
+                Name = d.Name,
+            };
+        }
+
+        private static Data.EmployeeGroup MapToData(Web.EmployeeGroup w)
+        {
+            return new Data.EmployeeGroup
+            {
+                ID = w.ID,
+                Name = w.Name
+            };
+        }
     }
 }

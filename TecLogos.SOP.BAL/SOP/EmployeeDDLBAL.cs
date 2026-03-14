@@ -1,32 +1,33 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using TecLogos.SOP.DAL.SOP;
-using TecLogos.SOP.WebModel.SOP;
 
 namespace TecLogos.SOP.BAL.SOP
 {
     public interface IEmployeeDDLBAL
     {
-        Task<List<EmployeeDDL>> GetAll();
+        Task<List<TecLogos.SOP.WebModel.SOP.EmployeeDDL>> GetAll();
     }
-
     public class EmployeeDDLBAL : IEmployeeDDLBAL
     {
-        private readonly IEmployeeDDLDAL _dal;
+        private readonly IEmployeeDDLDAL _DAL;
         private readonly ILogger<EmployeeDDLBAL> _logger;
 
-        public EmployeeDDLBAL(IEmployeeDDLDAL dal, ILogger<EmployeeDDLBAL> logger)
+        public EmployeeDDLBAL(IEmployeeDDLDAL DAL, ILogger<EmployeeDDLBAL> logger)
         {
-            _dal = dal;
+            _DAL = DAL;
             _logger = logger;
         }
 
-        public async Task<List<EmployeeDDL>> GetAll()
+        public async Task<List<TecLogos.SOP.WebModel.SOP.EmployeeDDL>> GetAll()
         {
-            var dataList = await _dal.GetAll();
-            return dataList.Select(d => new EmployeeDDL
+            var dataList = await _DAL.GetAll();
+
+            return dataList.Select(ddl =>
+            new TecLogos.SOP.WebModel.SOP.EmployeeDDL
             {
-                ID = d.ID,
-                Email = d.Email
+                ID = ddl.ID,
+              
+                Email = ddl.Email
             }).ToList();
         }
     }

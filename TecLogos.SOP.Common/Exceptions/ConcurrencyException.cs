@@ -1,3 +1,4 @@
+﻿
 namespace TecLogos.SOP.Common.Exceptions
 {
     public class ConcurrencyException : Exception

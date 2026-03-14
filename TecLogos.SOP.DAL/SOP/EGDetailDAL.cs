@@ -63,6 +63,7 @@ namespace TecLogos.SOP.DAL.SOP
                     EmployeeGroupID = GetGuid(reader, "EmployeeGroupID"),
                     GroupName = GetString(reader, "GroupName"),
                     EmployeeID = GetGuid(reader, "EmployeeID"),
+                 
                     EmployeeName = GetString(reader, "EmployeeName"),
                     Email = GetString(reader, "Email")
                 });
@@ -102,6 +103,7 @@ namespace TecLogos.SOP.DAL.SOP
                 EmployeeGroupID = GetGuid(reader, "EmployeeGroupID"),
                 GroupName = GetString(reader, "GroupName"),
                 EmployeeID = GetGuid(reader, "EmployeeID"),
+             
                 EmployeeName = GetString(reader, "EmployeeName"),
                 Email = GetString(reader, "Email")
             };

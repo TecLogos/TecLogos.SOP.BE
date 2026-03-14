@@ -1,4 +1,4 @@
-using Microsoft.Data.SqlClient;
+﻿using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TecLogos.SOP.DataModel.SOP;
@@ -30,9 +30,9 @@ namespace TecLogos.SOP.DAL.SOP
         private SqlConnection CreateConnection()
             => new SqlConnection(_connectionString);
 
-
+        
         // GET ALL
-
+        
         public async Task<List<EmployeeGroup>> GetAll()
         {
             const string query = @"
@@ -69,9 +69,9 @@ namespace TecLogos.SOP.DAL.SOP
             return list;
         }
 
-
+        
         // GET BY ID
-
+        
         public async Task<EmployeeGroup?> GetById(Guid id)
         {
             const string query = @"
@@ -105,9 +105,9 @@ namespace TecLogos.SOP.DAL.SOP
             return null;
         }
 
-
+        
         // CREATE
-
+        
         public async Task<Guid> Create(EmployeeGroup group, Guid userId)
         {
             var newId = Guid.NewGuid();
@@ -131,9 +131,9 @@ namespace TecLogos.SOP.DAL.SOP
             return newId;
         }
 
-
+        
         // UPDATE
-
+        
         public async Task<bool> Update(EmployeeGroup group, Guid userId)
         {
             const string query = @"
@@ -157,9 +157,9 @@ namespace TecLogos.SOP.DAL.SOP
             return rows > 0;
         }
 
-
+        
         // DELETE (soft)
-
+        
         public async Task<bool> Delete(Guid id, Guid userId)
         {
             const string query = @"
@@ -181,9 +181,9 @@ namespace TecLogos.SOP.DAL.SOP
             return rows > 0;
         }
 
-
+        
         // PRIVATE HELPER
-
+        
         private static EmployeeGroup MapEmployeeGroup(SqlDataReader r)
         {
             return new EmployeeGroup

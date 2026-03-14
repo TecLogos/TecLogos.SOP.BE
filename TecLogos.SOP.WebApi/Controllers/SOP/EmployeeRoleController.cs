@@ -32,11 +32,12 @@ namespace TecLogos.SOP.WebApi.Controllers
             });
         }
 
+
         [HttpGet("history")]
         public async Task<IActionResult> TrackRoleHistory(
-           Guid? employeeId,
-           int? year,
-           int? month)
+            Guid? employeeId,
+            int? year,
+            int? month)
         {
             var result = await _BAL.TrackRoleHistory(employeeId, year, month);
 
@@ -46,5 +47,7 @@ namespace TecLogos.SOP.WebApi.Controllers
                 Data = result.Item2
             });
         }
+
+
     }
 }
