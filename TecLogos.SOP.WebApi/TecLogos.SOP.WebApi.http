@@ -1,0 +1,6 @@
+@TecLogos.SOP.WebApi_HostAddress = http://localhost:5140
+
+GET {{TecLogos.SOP.WebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PDF generation library -->
+    <PackageReference Include="itext7" Version="7.2.3" />
+    <PackageReference Include="BCrypt.Net-Next" Version="4.1.0" />
+    <!-- Removed legacy Microsoft.AspNetCore.Hosting package (was 2.3.9) which can bring incompatible transitive dependencies on newer target frameworks -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="6.1.4" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TecLogos.SOP.Auth\TecLogos.SOP.Auth.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.Common\TecLogos.SOP.Common.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.DAL\TecLogos.SOP.DAL.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.DataModel\TecLogos.SOP.DataModel.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.EnumsAndConstants\TecLogos.SOP.EnumsAndConstants.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.WebModel\TecLogos.SOP.WebModel.csproj" />
+  </ItemGroup>
+
+</Project>

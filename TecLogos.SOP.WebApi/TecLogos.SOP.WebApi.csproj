@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
+    <!-- Removed legacy MVC Core package (incompatible with net8). Use framework-provided MVC surface. -->
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
+    <!-- Rely on the transitive IdentityModel packages brought by Microsoft.AspNetCore.Authentication.JwtBearer to avoid version conflicts -->
+    <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+    <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+    <PackageReference Include="Serilog.Sinks.Async" Version="2.1.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TecLogos.SOP.Auth\TecLogos.SOP.Auth.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.BAL\TecLogos.SOP.BAL.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.Common\TecLogos.SOP.Common.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.DAL\TecLogos.SOP.DAL.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.EnumsAndConstants\TecLogos.SOP.EnumsAndConstants.csproj" />
+    <ProjectReference Include="..\TecLogos.SOP.WebModel\TecLogos.SOP.WebModel.csproj" />
+  </ItemGroup>
+
+</Project>

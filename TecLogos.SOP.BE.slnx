@@ -1,0 +1,10 @@
+<Solution>
+  <Project Path="TecLogos.SOP.Auth/TecLogos.SOP.Auth.csproj" Id="fc2cc9c8-f429-4429-8bce-00671a8682d9" />
+  <Project Path="TecLogos.SOP.BAL/TecLogos.SOP.BAL.csproj" Id="a88be9e6-7d0b-47cc-972c-874c3350829a" />
+  <Project Path="TecLogos.SOP.Common/TecLogos.SOP.Common.csproj" Id="f5bf910d-d507-40ad-aaa5-ffa36f73e9f4" />
+  <Project Path="TecLogos.SOP.DAL/TecLogos.SOP.DAL.csproj" Id="2e6e93d3-1b9f-4618-ada9-83ab7de3ad93" />
+  <Project Path="TecLogos.SOP.DataModel/TecLogos.SOP.DataModel.csproj" Id="f962903e-aa30-4da5-9232-542137598e36" />
+  <Project Path="TecLogos.SOP.EnumsAndConstants/TecLogos.SOP.EnumsAndConstants.csproj" Id="3b247fd6-62df-4a71-88b3-ddc28608df4d" />
+  <Project Path="TecLogos.SOP.WebApi/TecLogos.SOP.WebApi.csproj" />
+  <Project Path="TecLogos.SOP.WebModel/TecLogos.SOP.WebModel.csproj" Id="3e24c251-4197-441c-96c9-5a9519302a6c" />
+</Solution>
