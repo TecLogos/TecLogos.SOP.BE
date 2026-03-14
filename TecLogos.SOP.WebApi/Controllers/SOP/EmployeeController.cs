@@ -7,7 +7,7 @@ using TecLogos.SOP.WebModel.Base;
 
 namespace TecLogos.SOP.WebApi.Controllers.SOP
 {
-    [Authorize (Roles="Admin, HRAdmin")]
+    [Authorize (Roles="Admin")]
     [ApiController]
     [Route("api/v1/[controller]")]
     public class EmployeeController : CustomControllerBase

@@ -226,6 +226,11 @@ namespace TecLogos.SOP.WebApi
             builder.Services.AddScoped<IEmailBAL, EmailBAL>();
             builder.Services.AddScoped<IAuthOnboardingBAL, AuthOnboardingBAL>();
             builder.Services.AddScoped<IAuthOnboardingDAL, AuthOnboardingDAL>();
+
+            //SOP
+            builder.Services.AddScoped<ISopDetailDAL, SopDetailDAL>();
+            builder.Services.AddScoped<ISopDetailBAL, SopDetailBAL>();
+
         }
     }
 }
