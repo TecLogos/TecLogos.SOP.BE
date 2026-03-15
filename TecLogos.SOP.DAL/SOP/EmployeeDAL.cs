@@ -149,10 +149,10 @@ namespace TecLogos.SOP.DAL.SOP
                 var employeeQuery = @"
                     INSERT INTO [Employee] (
                         ID, FirstName, MiddleName, LastName, Email,
-                        MobileNumber, Extension,  CreatedByID
+                        MobileNumber,  CreatedByID
                     ) VALUES (
                         @ID, @FirstName, @MiddleName, @LastName, @Email,
-                        @MobileNumber, @Extension, @CreatedByID
+                        @MobileNumber, @CreatedByID
                     );";
 
                 using (var cmd = new SqlCommand(employeeQuery, connection, transaction))

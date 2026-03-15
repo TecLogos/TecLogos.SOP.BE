@@ -67,7 +67,7 @@ namespace TecLogos.SOP.WebApi
             var builder = WebApplication.CreateBuilder(args);
             builder.Host.UseSerilog();
             var jwtSettings = builder.Configuration.GetSection("Jwt");
-            var secretKey = jwtSettings["Key"]; 
+            var secretKey = jwtSettings["Key"];
             var issuer = jwtSettings["Issuer"];
             var audience = jwtSettings["Audience"];
 
@@ -87,24 +87,24 @@ namespace TecLogos.SOP.WebApi
             .AddJwtBearer(options =>
             {
                 var key = Encoding.UTF8.GetBytes(secretKey);
-            
+
                 options.RequireHttpsMetadata = false;
                 options.SaveToken = true;
-            
+
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
                     IssuerSigningKey = new SymmetricSecurityKey(key),
-            
+
                     ValidateIssuer = true,
                     ValidIssuer = issuer,
-            
+
                     ValidateAudience = true,
                     ValidAudience = audience,
-            
+
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.Zero,
-            
+
                     NameClaimType = ClaimTypes.NameIdentifier,
                     RoleClaimType = ClaimTypes.Role
                 };
@@ -227,10 +227,9 @@ namespace TecLogos.SOP.WebApi
             builder.Services.AddScoped<IAuthOnboardingBAL, AuthOnboardingBAL>();
             builder.Services.AddScoped<IAuthOnboardingDAL, AuthOnboardingDAL>();
 
-            //SOP
-            builder.Services.AddScoped<ISopDetailDAL, SopDetailDAL>();
+            //  SOP Detail
             builder.Services.AddScoped<ISopDetailBAL, SopDetailBAL>();
-
+            builder.Services.AddScoped<ISopDetailDAL, SopDetailDAL>();
         }
     }
 }

@@ -23,6 +23,8 @@ namespace TecLogos.SOP.DAL.SOP
         Task<List<SopDetailsWorkFlowSetUp>> GetAllWorkflowStagesAsync();
         Task<SopDetailsWorkFlowSetUp?> GetWorkflowByLevelAsync(int level);
         Task<Guid> CreateWorkflowStageAsync(SopDetailsWorkFlowSetUp stage);
+        Task<bool> UpdateWorkflowStageAsync(SopDetailsWorkFlowSetUp stage);
+        Task<bool> DeleteWorkflowStageAsync(Guid id, Guid deletedBy);
         Task<bool> IsApproverForLevelAsync(Guid employeeId, int level);
         Task<List<int>> GetApproverLevelsForEmployeeAsync(Guid employeeId);
     }
@@ -405,6 +407,42 @@ namespace TecLogos.SOP.DAL.SOP
             cmd.Parameters.AddWithValue("@CreatedBy", stage.CreatedByID);
             await cmd.ExecuteNonQueryAsync();
             return stage.ID;
+        }
+
+        public async Task<bool> UpdateWorkflowStageAsync(SopDetailsWorkFlowSetUp stage)
+        {
+            const string sql = @"
+                UPDATE SopDetailsWorkFlowSetUp
+                SET StageName = @Name, ApprovalLevel = @Level,
+                    IsSupervisor = @IsSup, EmployeeGroupID = @GroupID,
+                    Modified = GETUTCDATE(), ModifiedByID = @ModifiedBy,
+                    Version = Version + 1
+                WHERE ID = @ID AND IsDeleted = 0";
+
+            using var conn = await OpenAsync();
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@ID", stage.ID);
+            cmd.Parameters.AddWithValue("@Name", stage.StageName ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@Level", stage.ApprovalLevel);
+            cmd.Parameters.AddWithValue("@IsSup", stage.IsSupervisor);
+            cmd.Parameters.AddWithValue("@GroupID", stage.EmployeeGroupID);
+            cmd.Parameters.AddWithValue("@ModifiedBy", stage.ModifiedByID);
+            return await cmd.ExecuteNonQueryAsync() > 0;
+        }
+
+        public async Task<bool> DeleteWorkflowStageAsync(Guid id, Guid deletedBy)
+        {
+            const string sql = @"
+                UPDATE SopDetailsWorkFlowSetUp
+                SET IsDeleted = 1, IsActive = 0,
+                    Deleted = GETUTCDATE(), DeletedByID = @DeletedBy
+                WHERE ID = @ID AND IsDeleted = 0";
+
+            using var conn = await OpenAsync();
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@ID", id);
+            cmd.Parameters.AddWithValue("@DeletedBy", deletedBy);
+            return await cmd.ExecuteNonQueryAsync() > 0;
         }
 
         public async Task<bool> IsApproverForLevelAsync(Guid employeeId, int level)

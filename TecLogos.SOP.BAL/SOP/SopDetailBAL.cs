@@ -37,6 +37,9 @@ namespace TecLogos.SOP.BAL.SOP
         // Workflow Setup
         Task<ApiResponse<List<WorkflowStageResponse>>> GetWorkflowStagesAsync();
         Task<ApiResponse<WorkflowStageResponse>> SetupWorkflowStageAsync(SetupWorkflowStageRequest request, Guid createdBy);
+        Task<ApiResponse<List<WorkflowStageResponse>>> BulkCreateWorkflowStagesAsync(List<SetupWorkflowStageRequest> requests, Guid createdBy);
+        Task<ApiResponse<WorkflowStageResponse>> UpdateWorkflowStageAsync(Guid id, SetupWorkflowStageRequest request, Guid modifiedBy);
+        Task<ApiResponse<bool>> DeleteWorkflowStageAsync(Guid id, Guid deletedBy);
     }
 
     public class SopDetailBAL : ISopDetailBAL
@@ -80,13 +83,14 @@ namespace TecLogos.SOP.BAL.SOP
         public async Task<ApiResponse<SopDetailResponse>> CreateAsync(
             CreateSopRequest request, IFormFile document, Guid createdBy)
         {
-            // Create the SOP record first to obtain the primary key (folder GUID)
+            var filePath = await SaveDocumentAsync(document, createdBy);
+
             var sop = new SopDetails
             {
                 SopTitle = request.SopTitle,
                 ExpirationDate = request.ExpirationDate,
-                SopDocument = null,
-                SopDocumentVersion = 0,
+                SopDocument = filePath,
+                SopDocumentVersion = 1,
                 Remark = request.Remark,
                 ApprovalStatus = (int)SopStatus.NotStarted,
                 ApprovalLevel = 0,
@@ -95,16 +99,6 @@ namespace TecLogos.SOP.BAL.SOP
 
             var id = await _dal.CreateAsync(sop);
             sop.ID = id;
-
-            // Save document into structured folder: Uploads/SOP-Details/{SopId}/SopDocument/V1/
-            var filePath = await SaveDocumentAsync(document, sop.ID, 1);
-            sop.SopDocument = filePath;
-            sop.SopDocumentVersion = 1;
-
-            // Persist document path and version
-            // Ensure ModifiedByID is set so DAL update has required parameter
-            sop.ModifiedByID = createdBy;
-            await _dal.UpdateAsync(sop);
 
             await _dal.AddHistoryAsync(new SopDetailsHistory
             {
@@ -137,11 +131,8 @@ namespace TecLogos.SOP.BAL.SOP
 
             if (newDocument != null)
             {
-                // Determine the new version number
-                var newVersion = sop.SopDocumentVersion <= 0 ? 1 : sop.SopDocumentVersion + 1;
-                var newPath = await SaveDocumentAsync(newDocument, sop.ID, newVersion);
-                sop.SopDocument = newPath;
-                sop.SopDocumentVersion = newVersion;
+                sop.SopDocument = await SaveDocumentAsync(newDocument, modifiedBy);
+                sop.SopDocumentVersion++;
             }
 
             sop.ModifiedByID = modifiedBy;
@@ -397,29 +388,67 @@ namespace TecLogos.SOP.BAL.SOP
                 MapToWorkflowResponse(saved ?? stage), "Workflow stage created.");
         }
 
+        public async Task<ApiResponse<List<WorkflowStageResponse>>> BulkCreateWorkflowStagesAsync(
+            List<SetupWorkflowStageRequest> requests, Guid createdBy)
+        {
+            var results = new List<WorkflowStageResponse>();
+            foreach (var request in requests)
+            {
+                var stage = new SopDetailsWorkFlowSetUp
+                {
+                    StageName = request.StageName,
+                    ApprovalLevel = request.ApprovalLevel,
+                    IsSupervisor = request.IsSupervisor,
+                    EmployeeGroupID = request.EmployeeGroupID,
+                    CreatedByID = createdBy
+                };
+                var id = await _dal.CreateWorkflowStageAsync(stage);
+                stage.ID = id;
+                var saved = await _dal.GetWorkflowByLevelAsync(request.ApprovalLevel);
+                results.Add(MapToWorkflowResponse(saved ?? stage));
+            }
+            return ApiResponse<List<WorkflowStageResponse>>.Ok(results,
+                $"{results.Count} workflow stage(s) created.");
+        }
+
+        public async Task<ApiResponse<WorkflowStageResponse>> UpdateWorkflowStageAsync(
+            Guid id, SetupWorkflowStageRequest request, Guid modifiedBy)
+        {
+            var all = await _dal.GetAllWorkflowStagesAsync();
+            var existing = all.FirstOrDefault(w => w.ID == id);
+            if (existing == null)
+                return ApiResponse<WorkflowStageResponse>.Fail("Workflow stage not found.");
+
+            existing.StageName = request.StageName;
+            existing.ApprovalLevel = request.ApprovalLevel;
+            existing.IsSupervisor = request.IsSupervisor;
+            existing.EmployeeGroupID = request.EmployeeGroupID;
+            existing.ModifiedByID = modifiedBy;
+
+            await _dal.UpdateWorkflowStageAsync(existing);
+
+            var saved = await _dal.GetWorkflowByLevelAsync(existing.ApprovalLevel);
+            return ApiResponse<WorkflowStageResponse>.Ok(
+                MapToWorkflowResponse(saved ?? existing), "Workflow stage updated.");
+        }
+
+        public async Task<ApiResponse<bool>> DeleteWorkflowStageAsync(Guid id, Guid deletedBy)
+        {
+            var all = await _dal.GetAllWorkflowStagesAsync();
+            if (!all.Any(w => w.ID == id))
+                return ApiResponse<bool>.Fail("Workflow stage not found.");
+
+            await _dal.DeleteWorkflowStageAsync(id, deletedBy);
+            return ApiResponse<bool>.Ok(true, "Workflow stage deleted.");
+        }
+
         // ── PRIVATE HELPERS ────────────────────────────────────────────────────
 
         private async Task<string> SaveDocumentAsync(IFormFile file, Guid uploadedBy)
         {
-            // Legacy: keep behavior if called without sopId/version - save under Uploads/SOPs
             var uploadDir = Path.Combine("Uploads", "SOPs");
             Directory.CreateDirectory(uploadDir);
-            var ext = Path.GetExtension(file.FileName) ?? ".pdf";
-            var fileName = $"SOP_{Path.GetFileNameWithoutExtension(file.FileName)}_{DateTime.UtcNow:yyyyMMdd}_{Guid.NewGuid():N8}{ext}";
-            var fullPath = Path.Combine(uploadDir, fileName);
-            using var stream = new FileStream(fullPath, FileMode.Create);
-            await file.CopyToAsync(stream);
-            return fullPath;
-        }
-
-        // New overload: save file under structured path: Uploads/SOP-Details/{sopId}/SopDocument/V{version}/
-        private async Task<string> SaveDocumentAsync(IFormFile file, Guid sopId, int version)
-        {
-            var uploadDir = Path.Combine("Uploads", "SOP-Details", sopId.ToString(), "SopDocument", $"V{version}");
-            Directory.CreateDirectory(uploadDir);
-            var ext = Path.GetExtension(file.FileName) ?? ".pdf";
-            var safeName = Path.GetFileNameWithoutExtension(file.FileName);
-            var fileName = $"{safeName}{ext}";
+            var fileName = $"SOP_{Path.GetFileNameWithoutExtension(file.FileName)}_{DateTime.UtcNow:yyyyMMdd}_{Guid.NewGuid().ToString("N")[..8]}.pdf";
             var fullPath = Path.Combine(uploadDir, fileName);
             using var stream = new FileStream(fullPath, FileMode.Create);
             await file.CopyToAsync(stream);
@@ -470,36 +499,36 @@ namespace TecLogos.SOP.BAL.SOP
             SopDetails s,
             List<SopDetailsApprovalHistory> approvalHistory,
             List<SopDetailsHistory> versionHistory) => new()
-        {
-            ID = s.ID,
-            SopTitle = s.SopTitle,
-            SopDocument = s.SopDocument,
-            ExpirationDate = s.ExpirationDate,
-            Status = (SopStatus)s.ApprovalStatus,
-            CurrentApprovalLevel = s.ApprovalLevel,
-            DocumentVersion = s.SopDocumentVersion,
-            Remark = s.Remark,
-            Created = s.Created,
-            ApprovalHistory = approvalHistory.Select(ah => new SopApprovalHistoryResponse
             {
-                ID = ah.ID,
-                ApprovalLevel = ah.ApprovalLevel,
-                ApprovalStatus = ah.ApprovalStatus,
-                Comments = ah.Comments,
-                ActionDate = ah.Created
-            }).ToList(),
-            VersionHistory = versionHistory.Select(h => new SopVersionHistoryResponse
-            {
-                ID = h.ID,
-                Name = h.Name,
-                FileName = h.FileName,
-                Status = h.ApprovalStatus,
-                ApprovalLevel = h.ApprovalLevel,
-                ExpiryDate = h.ExpiryDate,
-                Remarks = h.Remarks,
-                Created = h.Created
-            }).ToList()
-        };
+                ID = s.ID,
+                SopTitle = s.SopTitle,
+                SopDocument = s.SopDocument,
+                ExpirationDate = s.ExpirationDate,
+                Status = (SopStatus)s.ApprovalStatus,
+                CurrentApprovalLevel = s.ApprovalLevel,
+                DocumentVersion = s.SopDocumentVersion,
+                Remark = s.Remark,
+                Created = s.Created,
+                ApprovalHistory = approvalHistory.Select(ah => new SopApprovalHistoryResponse
+                {
+                    ID = ah.ID,
+                    ApprovalLevel = ah.ApprovalLevel,
+                    ApprovalStatus = ah.ApprovalStatus,
+                    Comments = ah.Comments,
+                    ActionDate = ah.Created
+                }).ToList(),
+                VersionHistory = versionHistory.Select(h => new SopVersionHistoryResponse
+                {
+                    ID = h.ID,
+                    Name = h.Name,
+                    FileName = h.FileName,
+                    Status = h.ApprovalStatus,
+                    ApprovalLevel = h.ApprovalLevel,
+                    ExpiryDate = h.ExpiryDate,
+                    Remarks = h.Remarks,
+                    Created = h.Created
+                }).ToList()
+            };
 
         private static WorkflowStageResponse MapToWorkflowResponse(SopDetailsWorkFlowSetUp wf) => new()
         {

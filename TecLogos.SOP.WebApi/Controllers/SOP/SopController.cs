@@ -6,6 +6,7 @@ using TecLogos.SOP.WebModel.SOP;
 
 namespace TecLogos.SOP.WebApi.Controllers
 {
+    [ApiController]
     [Route("api/v1/[controller]")]
     [Authorize]
     public class SopController : CustomControllerBase
@@ -90,6 +91,32 @@ namespace TecLogos.SOP.WebApi.Controllers
         public async Task<IActionResult> SetupWorkflowStage([FromBody] SetupWorkflowStageRequest request)
         {
             var result = await _sopBAL.SetupWorkflowStageAsync(request, CurrentUserId);
+            return result.Success ? Ok(result) : BadRequest(result);
+        }
+
+        [HttpPost("workflow-stages/bulk")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> BulkCreateWorkflowStages([FromBody] List<SetupWorkflowStageRequest> requests)
+        {
+            if (requests == null || !requests.Any())
+                return BadRequest("At least one stage is required.");
+            var result = await _sopBAL.BulkCreateWorkflowStagesAsync(requests, CurrentUserId);
+            return result.Success ? Ok(result) : BadRequest(result);
+        }
+
+        [HttpPut("workflow-stages/{id:guid}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> UpdateWorkflowStage(Guid id, [FromBody] SetupWorkflowStageRequest request)
+        {
+            var result = await _sopBAL.UpdateWorkflowStageAsync(id, request, CurrentUserId);
+            return result.Success ? Ok(result) : BadRequest(result);
+        }
+
+        [HttpDelete("workflow-stages/{id:guid}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteWorkflowStage(Guid id)
+        {
+            var result = await _sopBAL.DeleteWorkflowStageAsync(id, CurrentUserId);
             return result.Success ? Ok(result) : BadRequest(result);
         }
 
