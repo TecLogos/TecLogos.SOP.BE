@@ -27,9 +27,9 @@ namespace TecLogos.SOP.DAL.SOP
             _logger = logger;
         }
 
-       
+
         // GET ALL (paged)
-       
+
         public async Task<(int totalCount, List<EmployeeList>)> GetAll(int pageNumber, int pageSize, string term)
         {
             var query = @"
@@ -44,7 +44,7 @@ namespace TecLogos.SOP.DAL.SOP
                          OR e.Email       LIKE '%' + @Term + '%');
 
                 SELECT e.ID, e.FirstName, e.MiddleName, e.LastName,
-                       e.Email, e.MobileNumber, e.IsActive
+                       e.Email, e.MobileNumber, e.IsActive, e.Version
                       
                 FROM [Employee] e WITH(NOLOCK)
                   
@@ -83,13 +83,14 @@ namespace TecLogos.SOP.DAL.SOP
                     employees.Add(new EmployeeList
                     {
                         ID = reader.GetGuid(reader.GetOrdinal("ID")),
-                       
+
                         FirstName = reader.GetString(reader.GetOrdinal("FirstName")),
                         MiddleName = reader.IsDBNull(reader.GetOrdinal("MiddleName")) ? null : reader.GetString(reader.GetOrdinal("MiddleName")),
                         LastName = reader.GetString(reader.GetOrdinal("LastName")),
                         Email = reader.GetString(reader.GetOrdinal("Email")),
                         MobileNumber = reader.GetString(reader.GetOrdinal("MobileNumber")),
-                        IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive"))
+                        IsActive = reader.GetBoolean(reader.GetOrdinal("IsActive")),
+                        Version = reader.GetInt32(reader.GetOrdinal("Version"))
                     });
                 }
             }
@@ -98,9 +99,9 @@ namespace TecLogos.SOP.DAL.SOP
             return (totalCount, employees);
         }
 
-       
+
         // GET BY ID
-       
+
         public async Task<Employee?> GetById(Guid id)
         {
             var query = @"
@@ -135,9 +136,9 @@ namespace TecLogos.SOP.DAL.SOP
             return employee;
         }
 
-       
+
         // CREATE
-       
+
         public async Task<Guid> Create(Employee employee)
         {
             using var connection = new SqlConnection(_connectionString);
@@ -183,53 +184,54 @@ namespace TecLogos.SOP.DAL.SOP
             }
         }
 
-       
+
         // UPDATE
-       
+
         public async Task<bool> Update(Employee emp)
         {
             using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
             using var transaction = connection.BeginTransaction();
 
-                var empQuery = @"
+            var empQuery = @"
                     UPDATE Employee
                     SET
                          FirstName = @FirstName, MiddleName = @MiddleName,
                         LastName = @LastName, Email = @Email, MobileNumber = @MobileNumber,
+                        ManagerID = COALESCE(@ManagerID, ManagerID),
                         IsActive = @IsActive,
                         Version = Version + 1, Modified = GETUTCDATE(), ModifiedByID = @ModifiedByID
                     WHERE ID = @ID AND Version = @Version AND IsDeleted = 0;";
 
-                int rowsAffected;
-                using (var cmd = new SqlCommand(empQuery, connection, transaction))
-                {
-                    AddUpdateEmployeeParameters(cmd, emp);
-                    rowsAffected = await cmd.ExecuteNonQueryAsync();
-                }
+            int rowsAffected;
+            using (var cmd = new SqlCommand(empQuery, connection, transaction))
+            {
+                AddUpdateEmployeeParameters(cmd, emp);
+                rowsAffected = await cmd.ExecuteNonQueryAsync();
+            }
 
-                if (rowsAffected == 0)
-                {
-                    transaction.Rollback();
-                    return false;
-                }
+            if (rowsAffected == 0)
+            {
+                transaction.Rollback();
+                return false;
+            }
 
-            
-                // ── Role: get old value ──────────────────────────────────────
-                Guid? oldRoleId = null;
-                using (var cmd = new SqlCommand(
-                    "SELECT RoleID FROM [EmployeeRole] WHERE EmployeeID = @ID AND IsDeleted = 0",
-                    connection, transaction))
-                {
-                    cmd.Parameters.AddWithValue("@ID", emp.ID);
-                    var result = await cmd.ExecuteScalarAsync();
-                    if (result != null && result != DBNull.Value)
-                        oldRoleId = (Guid)result;
-                }
 
-                if (emp.RoleID.HasValue)
-                {
-                    var updateRoleQuery = @"
+            // ── Role: get old value ──────────────────────────────────────
+            Guid? oldRoleId = null;
+            using (var cmd = new SqlCommand(
+                "SELECT RoleID FROM [EmployeeRole] WHERE EmployeeID = @ID AND IsDeleted = 0",
+                connection, transaction))
+            {
+                cmd.Parameters.AddWithValue("@ID", emp.ID);
+                var result = await cmd.ExecuteScalarAsync();
+                if (result != null && result != DBNull.Value)
+                    oldRoleId = (Guid)result;
+            }
+
+            if (emp.RoleID.HasValue)
+            {
+                var updateRoleQuery = @"
                         IF EXISTS (SELECT 1 FROM [EmployeeRole] WHERE EmployeeID = @ID AND IsDeleted = 0)
                             UPDATE [EmployeeRole]
                             SET RoleID = @RoleID, Version = Version + 1,
@@ -239,16 +241,16 @@ namespace TecLogos.SOP.DAL.SOP
                             INSERT INTO [EmployeeRole] (ID, EmployeeID, RoleID, CreatedByID)
                             VALUES (NEWID(), @ID, @RoleID, @ModifiedByID)";
 
-                    using var cmd = new SqlCommand(updateRoleQuery, connection, transaction);
-                    cmd.Parameters.AddWithValue("@ID", emp.ID);
-                    cmd.Parameters.AddWithValue("@RoleID", emp.RoleID.Value);
-                    cmd.Parameters.AddWithValue("@ModifiedByID", emp.ModifiedByID);
-                    await cmd.ExecuteNonQueryAsync();
-                }
+                using var cmd = new SqlCommand(updateRoleQuery, connection, transaction);
+                cmd.Parameters.AddWithValue("@ID", emp.ID);
+                cmd.Parameters.AddWithValue("@RoleID", emp.RoleID.Value);
+                cmd.Parameters.AddWithValue("@ModifiedByID", emp.ModifiedByID);
+                await cmd.ExecuteNonQueryAsync();
+            }
 
-                if (emp.RoleID.HasValue && oldRoleId.HasValue && oldRoleId.Value != emp.RoleID.Value)
-                {
-                    var overrideQuery = @"
+            if (emp.RoleID.HasValue && oldRoleId.HasValue && oldRoleId.Value != emp.RoleID.Value)
+            {
+                var overrideQuery = @"
                         INSERT INTO [RoleHistory] (
                             ID, EmployeeID, RoleID, OldRoleID,
                             ChangedOn, Remarks, CreatedByID
@@ -257,23 +259,23 @@ namespace TecLogos.SOP.DAL.SOP
                             GETUTCDATE(), 'Role changed during employee update', @ModifiedByID
                         )";
 
-                    using var cmd = new SqlCommand(overrideQuery, connection, transaction);
-                    cmd.Parameters.AddWithValue("@ID", emp.ID);
-                    cmd.Parameters.AddWithValue("@NewRole", emp.RoleID.Value);
-                    cmd.Parameters.AddWithValue("@OldRole", oldRoleId.Value);
-                    cmd.Parameters.AddWithValue("@ModifiedByID", emp.ModifiedByID);
-                    await cmd.ExecuteNonQueryAsync();
-                }
+                using var cmd = new SqlCommand(overrideQuery, connection, transaction);
+                cmd.Parameters.AddWithValue("@ID", emp.ID);
+                cmd.Parameters.AddWithValue("@NewRole", emp.RoleID.Value);
+                cmd.Parameters.AddWithValue("@OldRole", oldRoleId.Value);
+                cmd.Parameters.AddWithValue("@ModifiedByID", emp.ModifiedByID);
+                await cmd.ExecuteNonQueryAsync();
+            }
 
-             
-                transaction.Commit();
-                return true;
-           
+
+            transaction.Commit();
+            return true;
+
         }
 
-       
+
         // DELETE (soft)
-       
+
         public async Task<bool> Delete(Guid id, Guid deletedByID)
         {
             var query = @"
@@ -292,9 +294,9 @@ namespace TecLogos.SOP.DAL.SOP
             return affectedRows > 0;
         }
 
-       
+
         // IS EMPLOYEE EMAIL EXISTS
-       
+
         public async Task<bool> IsEmployeeEmailExists(string email)
         {
             var query = @"
@@ -312,9 +314,9 @@ namespace TecLogos.SOP.DAL.SOP
             return result != null;
         }
 
-       
+
         // PRIVATE HELPERS
-       
+
 
         private static Employee MapEmployee(SqlDataReader r)
         {
@@ -337,13 +339,13 @@ namespace TecLogos.SOP.DAL.SOP
             return new Employee
             {
                 ID = r.GetGuid(r.GetOrdinal("ID")),
-          
+
                 FirstName = r.GetString(r.GetOrdinal("FirstName")),
                 MiddleName = SafeStr("MiddleName"),
                 LastName = r.GetString(r.GetOrdinal("LastName")),
                 Email = r.GetString(r.GetOrdinal("Email")),
                 MobileNumber = r.GetString(r.GetOrdinal("MobileNumber")),
-                
+
                 RoleID = Safe<Guid>("RoleID"),
 
                 IsActive = r.GetBoolean(r.GetOrdinal("IsActive")),
@@ -367,20 +369,20 @@ namespace TecLogos.SOP.DAL.SOP
             cmd.Parameters.AddWithValue("@LastName", e.LastName);
             cmd.Parameters.AddWithValue("@Email", e.Email);
             cmd.Parameters.AddWithValue("@MobileNumber", e.MobileNumber);
-           
+            cmd.Parameters.AddWithValue("@ManagerID", e.ManagerID.HasValue ? (object)e.ManagerID.Value : DBNull.Value);
             cmd.Parameters.AddWithValue("@CreatedByID", e.CreatedByID);
         }
 
         private static void AddUpdateEmployeeParameters(SqlCommand cmd, Employee e)
         {
             cmd.Parameters.AddWithValue("@ID", e.ID);
-            
+
             cmd.Parameters.AddWithValue("@FirstName", e.FirstName);
             cmd.Parameters.AddWithValue("@MiddleName", e.MiddleName ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@LastName", e.LastName);
             cmd.Parameters.AddWithValue("@Email", e.Email);
             cmd.Parameters.AddWithValue("@MobileNumber", e.MobileNumber);
-           
+            cmd.Parameters.AddWithValue("@ManagerID", e.ManagerID.HasValue ? (object)e.ManagerID.Value : DBNull.Value);
             cmd.Parameters.AddWithValue("@IsActive", e.IsActive);
             cmd.Parameters.AddWithValue("@Version", e.Version);
             cmd.Parameters.AddWithValue("@ModifiedByID", e.ModifiedByID);

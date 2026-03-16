@@ -60,7 +60,7 @@ namespace TecLogos.SOP.BAL.SOP
         // CREATE
         public async Task<Guid> Create(WebModel.SOP.Employee employee, Guid createdByID)
         {
-          
+
             if (string.IsNullOrWhiteSpace(employee.FirstName))
                 throw new ArgumentException("First Name is required");
 
@@ -78,7 +78,7 @@ namespace TecLogos.SOP.BAL.SOP
                 LastName = employee.LastName,
                 Email = employee.Email,
                 MobileNumber = employee.MobileNumber,
-               
+
                 RoleID = employee.RoleID == Guid.Empty ? null : employee.RoleID,
                 IsActive = true,
                 IsDeleted = false,
@@ -86,7 +86,7 @@ namespace TecLogos.SOP.BAL.SOP
                 CreatedByID = createdByID
             };
 
-        
+
 
             // Save employee
             var employeeId = await _employeeDAL.Create(employeeDM);
@@ -111,20 +111,20 @@ namespace TecLogos.SOP.BAL.SOP
             var employee = new DataModel.SOP.Employee
             {
                 ID = dto.ID,
-               
+
                 FirstName = dto.FirstName,
                 MiddleName = dto.MiddleName,
                 LastName = dto.LastName,
                 Email = dto.Email,
                 MobileNumber = dto.MobileNumber,
-               
+
                 RoleID = dto.RoleID == Guid.Empty ? null : dto.RoleID,
                 Version = dto.Version,
                 IsActive = dto.IsActive,
                 ModifiedByID = modifiedByID
             };
 
-         
+
 
             var success = await _employeeDAL.Update(employee);
 
@@ -148,13 +148,13 @@ namespace TecLogos.SOP.BAL.SOP
             return new WebModel.SOP.EmployeeList
             {
                 ID = employee.ID,
-              
+
                 FirstName = employee.FirstName,
                 MiddleName = employee.MiddleName,
                 LastName = employee.LastName,
                 Email = employee.Email,
                 MobileNumber = employee.MobileNumber,
-               
+                Version = employee.Version,
                 IsActive = employee.IsActive,
             };
         }
@@ -164,13 +164,13 @@ namespace TecLogos.SOP.BAL.SOP
             return new WebModel.SOP.Employee
             {
                 ID = employee.ID,
-              
+
                 FirstName = employee.FirstName,
                 MiddleName = employee.MiddleName,
                 LastName = employee.LastName,
                 Email = employee.Email,
                 MobileNumber = employee.MobileNumber,
-               
+
                 RoleID = employee.RoleID,
                 Version = employee.Version,
                 IsActive = employee.IsActive,
@@ -182,7 +182,7 @@ namespace TecLogos.SOP.BAL.SOP
                 Deleted = employee.Deleted,
                 DeletedByID = employee.DeletedByID ?? Guid.Empty,
 
-            
+
             };
         }
     }

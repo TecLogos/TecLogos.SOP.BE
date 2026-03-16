@@ -10,6 +10,7 @@ namespace TecLogos.SOP.WebModel.SOP
         public string LastName { get; set; }
         public string Email { get; set; }
         public string MobileNumber { get; set; }
+        public Guid? ManagerID { get; set; }
         public Guid? RoleID { get; set; }
 
     }
