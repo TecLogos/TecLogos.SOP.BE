@@ -1,8 +1,5 @@
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using TecLogos.SOP.Common;
+﻿using Microsoft.Extensions.Logging;
 using TecLogos.SOP.DAL.SOP;
-using TecLogos.SOP.DataModel.SOP;
 using TecLogos.SOP.EnumsAndConstants;
 using TecLogos.SOP.WebModel.SOP;
 
@@ -10,36 +7,15 @@ namespace TecLogos.SOP.BAL.SOP
 {
     public interface ISopDetailBAL
     {
-        // Admin
-        Task<ApiResponse<PagedResult<SopListResponse>>> GetAllAsync(SopFilterRequest filter);
-        Task<ApiResponse<SopDetailResponse>> GetByIdAsync(Guid id);
-        Task<ApiResponse<SopDetailResponse>> CreateAsync(CreateSopRequest request, IFormFile document, Guid createdBy);
-        Task<ApiResponse<SopDetailResponse>> UpdateAsync(Guid id, UpdateSopRequest request, IFormFile? newDocument, Guid modifiedBy);
-        Task<ApiResponse<bool>> DeleteAsync(Guid id, Guid deletedBy);
-        Task<ApiResponse<byte[]>> ExportCsvAsync();
-
-        // Initiator
-        Task<ApiResponse<List<SopListResponse>>> GetAvailableForInitiatorAsync();
-        Task<ApiResponse<bool>> SubmitAsync(SubmitSopRequest request, Guid submittedBy);
-
-        // Supervisor
-        Task<ApiResponse<List<SopListResponse>>> GetPendingForSupervisorAsync();
-        Task<ApiResponse<bool>> SupervisorForwardAsync(Guid sopId, SupervisorActionRequest request, Guid supervisorId);
-        Task<ApiResponse<bool>> SupervisorRequestChangesAsync(Guid sopId, SupervisorActionRequest request, Guid supervisorId);
-
-        // Approver
-        Task<ApiResponse<List<SopListResponse>>> GetPendingForApproverAsync(Guid approverId);
-        Task<ApiResponse<bool>> ProcessApprovalAsync(ApprovalActionRequest request, Guid approverId);
-
-        // PDF
-        Task<ApiResponse<byte[]>> DownloadAsync(Guid id);
-
-        // Workflow Setup
-        Task<ApiResponse<List<WorkflowStageResponse>>> GetWorkflowStagesAsync();
-        Task<ApiResponse<WorkflowStageResponse>> SetupWorkflowStageAsync(SetupWorkflowStageRequest request, Guid createdBy);
-        Task<ApiResponse<List<WorkflowStageResponse>>> BulkCreateWorkflowStagesAsync(List<SetupWorkflowStageRequest> requests, Guid createdBy);
-        Task<ApiResponse<WorkflowStageResponse>> UpdateWorkflowStageAsync(Guid id, SetupWorkflowStageRequest request, Guid modifiedBy);
-        Task<ApiResponse<bool>> DeleteWorkflowStageAsync(Guid id, Guid deletedBy);
+        Task<Guid> CreateSop(CreateSopRequest request, Guid userId);
+        Task<bool> ApproveSop(Guid sopId, Guid approverId, string? comments);
+        Task<bool> RejectSop(Guid sopId, Guid approverId, string? comments);
+        Task<SopTrackingResponse> GetSopTracking(Guid sopId);
+        Task<SopListResponse> GetSopsForApproval(Guid userId, int? year);
+        Task<SopApprovalHistoryListResponse> GetSopsHistory(Guid userId, int approvalStatus, int? year);
+        Task<SopListResponse> GetMySopsHistory(Guid userId, int approvalStatus, int? year);
+        Task<SopListResponse> GetAllSops(int? approvalStatus, int? year);
+        Task<bool> IsUserApprover(Guid userId);
     }
 
     public class SopDetailBAL : ISopDetailBAL
@@ -53,491 +29,174 @@ namespace TecLogos.SOP.BAL.SOP
             _logger = logger;
         }
 
-        // ── ADMIN ──────────────────────────────────────────────────────────────
-
-        public async Task<ApiResponse<PagedResult<SopListResponse>>> GetAllAsync(SopFilterRequest filter)
+        // ── CREATE SOP ──
+        public async Task<Guid> CreateSop(CreateSopRequest request, Guid userId)
         {
-            var (total, items) = await _dal.GetAllAsync(
-                filter.PageNumber, filter.PageSize, filter.Search, (int?)filter.Status);
+            if (string.IsNullOrWhiteSpace(request.SopTitle))
+                throw new Exception("SOP Title is required.");
 
-            return ApiResponse<PagedResult<SopListResponse>>.Ok(new PagedResult<SopListResponse>
+            // ExpirationDate is optional (null = evergreen SOP)
+            if (request.ExpirationDate.HasValue && request.ExpirationDate.Value <= DateTime.UtcNow)
+                throw new Exception("Expiration date must be a future date.");
+
+            var dm = new DataModel.SOP.SopDetail
             {
-                Items = items.Select(MapToListResponse).ToList(),
-                TotalCount = total,
-                PageNumber = filter.PageNumber,
-                PageSize = filter.PageSize
-            });
-        }
-
-        public async Task<ApiResponse<SopDetailResponse>> GetByIdAsync(Guid id)
-        {
-            var sop = await _dal.GetByIdAsync(id);
-            if (sop == null) return ApiResponse<SopDetailResponse>.Fail("SOP not found.");
-
-            var approvalHistory = await _dal.GetApprovalHistoryAsync(id);
-            var versionHistory = await _dal.GetVersionHistoryAsync(id);
-
-            return ApiResponse<SopDetailResponse>.Ok(MapToDetailResponse(sop, approvalHistory, versionHistory));
-        }
-
-        public async Task<ApiResponse<SopDetailResponse>> CreateAsync(
-            CreateSopRequest request, IFormFile document, Guid createdBy)
-        {
-            var filePath = await SaveDocumentAsync(document, createdBy);
-
-            var sop = new SopDetails
-            {
-                SopTitle = request.SopTitle,
+                ID = Guid.NewGuid(),
+                SopTitle = request.SopTitle.Trim(),
                 ExpirationDate = request.ExpirationDate,
-                SopDocument = filePath,
-                SopDocumentVersion = 1,
+                SopDocument = request.SopDocument,
                 Remark = request.Remark,
-                ApprovalStatus = (int)SopStatus.NotStarted,
-                ApprovalLevel = 0,
-                CreatedByID = createdBy
+                ApprovalLevel = 0,                        // Not Started
+                ApprovalStatus = SopApprovalStatus.Pending,
+                CreatedByID = userId,
+                Created = DateTime.UtcNow
             };
 
-            var id = await _dal.CreateAsync(sop);
-            sop.ID = id;
+            _logger.LogInformation("BAL: Creating SOP [{Title}] by {UserId}", dm.SopTitle, userId);
+            return await _dal.CreateSop(dm);
+        }
 
-            await _dal.AddHistoryAsync(new SopDetailsHistory
+        // ── APPROVE SOP ──
+        public async Task<bool> ApproveSop(Guid sopId, Guid approverId, string? comments)
+        {
+            if (sopId == Guid.Empty) throw new Exception("SOP ID is required.");
+            if (approverId == Guid.Empty) throw new Exception("Approver ID is required.");
+
+            _logger.LogInformation("BAL: Approving SOP {SopId} by {ApproverId}", sopId, approverId);
+            return await _dal.ApproveSop(sopId, approverId, comments);
+        }
+
+        // ── REJECT SOP ──
+        // Comments required on rejection — audit trail must explain why
+        public async Task<bool> RejectSop(Guid sopId, Guid approverId, string? comments)
+        {
+            if (sopId == Guid.Empty) throw new Exception("SOP ID is required.");
+            if (approverId == Guid.Empty) throw new Exception("Approver ID is required.");
+
+            if (string.IsNullOrWhiteSpace(comments))
+                throw new Exception("Comments are required when rejecting a SOP.");
+
+            _logger.LogInformation("BAL: Rejecting SOP {SopId} by {ApproverId}", sopId, approverId);
+            return await _dal.RejectSop(sopId, approverId, comments);
+        }
+
+        // ── GET SOP TRACKING ──
+        public async Task<SopTrackingResponse> GetSopTracking(Guid sopId)
+        {
+            if (sopId == Guid.Empty) throw new Exception("SOP ID is required.");
+
+            var steps = await _dal.GetSopTracking(sopId);
+
+            return new SopTrackingResponse
             {
-                SopDetailsID = id,
-                Name = sop.SopTitle,
-                FileName = sop.SopDocument,
-                ApprovalStatus = sop.ApprovalStatus,
-                ApprovalLevel = sop.ApprovalLevel,
-                ExpiryDate = sop.ExpirationDate,
-                Remarks = sop.Remark,
-                CreatedByID = createdBy
-            });
-
-            return ApiResponse<SopDetailResponse>.Ok(
-                MapToDetailResponse(sop, new(), new()), "SOP created successfully.");
-        }
-
-        public async Task<ApiResponse<SopDetailResponse>> UpdateAsync(
-            Guid id, UpdateSopRequest request, IFormFile? newDocument, Guid modifiedBy)
-        {
-            var sop = await _dal.GetByIdAsync(id);
-            if (sop == null) return ApiResponse<SopDetailResponse>.Fail("SOP not found.");
-
-            if (sop.ExpirationDate.HasValue && sop.ExpirationDate.Value < DateTime.UtcNow)
-                return ApiResponse<SopDetailResponse>.Fail("Cannot edit an expired SOP.");
-
-            if (!string.IsNullOrWhiteSpace(request.SopTitle)) sop.SopTitle = request.SopTitle;
-            if (request.ExpirationDate.HasValue) sop.ExpirationDate = request.ExpirationDate;
-            if (!string.IsNullOrWhiteSpace(request.Remark)) sop.Remark = request.Remark;
-
-            if (newDocument != null)
-            {
-                sop.SopDocument = await SaveDocumentAsync(newDocument, modifiedBy);
-                sop.SopDocumentVersion++;
-            }
-
-            sop.ModifiedByID = modifiedBy;
-            await _dal.UpdateAsync(sop);
-
-            await _dal.AddHistoryAsync(new SopDetailsHistory
-            {
-                SopDetailsID = sop.ID,
-                Name = sop.SopTitle,
-                FileName = sop.SopDocument,
-                ApprovalStatus = sop.ApprovalStatus,
-                ApprovalLevel = sop.ApprovalLevel,
-                ExpiryDate = sop.ExpirationDate,
-                Remarks = sop.Remark,
-                CreatedByID = modifiedBy
-            });
-
-            return ApiResponse<SopDetailResponse>.Ok(
-                MapToDetailResponse(sop, new(), new()), "SOP updated.");
-        }
-
-        public async Task<ApiResponse<bool>> DeleteAsync(Guid id, Guid deletedBy)
-        {
-            var sop = await _dal.GetByIdAsync(id);
-            if (sop == null) return ApiResponse<bool>.Fail("SOP not found.");
-
-            await _dal.DeleteAsync(id, deletedBy);
-            return ApiResponse<bool>.Ok(true, "SOP deleted.");
-        }
-
-        public async Task<ApiResponse<byte[]>> ExportCsvAsync()
-        {
-            var (_, sops) = await _dal.GetAllAsync(1, int.MaxValue, null, null);
-            var lines = new List<string> { "SopId,SopDocumentName,DateOfExpiry,StatusOfSopSubmission" };
-
-            foreach (var sop in sops)
-                lines.Add(string.Join(",",
-                    sop.ID,
-                    $"\"{sop.SopTitle}\"",
-                    sop.ExpirationDate?.ToString("yyyy-MM-dd") ?? "N/A",
-                    ((SopStatus)sop.ApprovalStatus).ToString()));
-
-            var bytes = System.Text.Encoding.UTF8.GetBytes(string.Join("\n", lines));
-            return ApiResponse<byte[]>.Ok(bytes, "Export ready.");
-        }
-
-        // ── INITIATOR ──────────────────────────────────────────────────────────
-
-        public async Task<ApiResponse<List<SopListResponse>>> GetAvailableForInitiatorAsync()
-        {
-            var sops = await _dal.GetActiveSopsAsync();
-            var filtered = sops
-                .Where(s => s.ApprovalStatus != (int)SopStatus.Completed)
-                .Select(MapToListResponse)
-                .ToList();
-
-            return ApiResponse<List<SopListResponse>>.Ok(filtered);
-        }
-
-        public async Task<ApiResponse<bool>> SubmitAsync(SubmitSopRequest request, Guid submittedBy)
-        {
-            var sop = await _dal.GetByIdAsync(request.SopID);
-            if (sop == null) return ApiResponse<bool>.Fail("SOP not found.");
-
-            if (sop.ApprovalStatus == (int)SopStatus.Submitted || sop.ApprovalStatus == (int)SopStatus.Completed)
-                return ApiResponse<bool>.Fail("SOP is already submitted or completed.");
-
-            if (sop.ExpirationDate.HasValue && sop.ExpirationDate.Value < DateTime.UtcNow)
-                return ApiResponse<bool>.Fail("Cannot submit an expired SOP.");
-
-            sop.ApprovalStatus = (int)SopStatus.Submitted;
-            sop.ModifiedByID = submittedBy;
-            await _dal.UpdateAsync(sop);
-
-            await AddApprovalRecord(sop.ID, 0, (int)ApprovalStatus.Pending, request.Comments, submittedBy, sop.SopDocumentVersion);
-            await AddSopHistory(sop, submittedBy);
-
-            return ApiResponse<bool>.Ok(true, "SOP submitted for supervisor review.");
-        }
-
-        // ── SUPERVISOR ─────────────────────────────────────────────────────────
-
-        public async Task<ApiResponse<List<SopListResponse>>> GetPendingForSupervisorAsync()
-        {
-            var sops = await _dal.GetByStatusAsync((int)SopStatus.Submitted);
-            return ApiResponse<List<SopListResponse>>.Ok(sops.Select(MapToListResponse).ToList());
-        }
-
-        public async Task<ApiResponse<bool>> SupervisorForwardAsync(
-            Guid sopId, SupervisorActionRequest request, Guid supervisorId)
-        {
-            var sop = await _dal.GetByIdAsync(sopId);
-            if (sop == null) return ApiResponse<bool>.Fail("SOP not found.");
-
-            if (sop.ApprovalStatus != (int)SopStatus.Submitted)
-                return ApiResponse<bool>.Fail("SOP must be in Submitted status for supervisor action.");
-
-            sop.ApprovalStatus = (int)SopStatus.PendingApprovalLevel1;
-            sop.ApprovalLevel = 1;
-            sop.ModifiedByID = supervisorId;
-            await _dal.UpdateAsync(sop);
-
-            await AddApprovalRecord(sop.ID, 0, (int)ApprovalStatus.Approved, request.Comments, supervisorId, sop.SopDocumentVersion);
-            await AddSopHistory(sop, supervisorId);
-
-            return ApiResponse<bool>.Ok(true, "SOP forwarded to Level 1 Approver.");
-        }
-
-        public async Task<ApiResponse<bool>> SupervisorRequestChangesAsync(
-            Guid sopId, SupervisorActionRequest request, Guid supervisorId)
-        {
-            var sop = await _dal.GetByIdAsync(sopId);
-            if (sop == null) return ApiResponse<bool>.Fail("SOP not found.");
-
-            if (sop.ApprovalStatus != (int)SopStatus.Submitted)
-                return ApiResponse<bool>.Fail("SOP must be in Submitted status.");
-
-            sop.ApprovalStatus = (int)SopStatus.InProgress;
-            sop.ModifiedByID = supervisorId;
-            await _dal.UpdateAsync(sop);
-
-            await AddApprovalRecord(sop.ID, 0, (int)ApprovalStatus.NeedsChanges, request.Comments, supervisorId, sop.SopDocumentVersion);
-            await AddSopHistory(sop, supervisorId);
-
-            return ApiResponse<bool>.Ok(true, "SOP returned to initiator for changes.");
-        }
-
-        // ── APPROVER ───────────────────────────────────────────────────────────
-
-        public async Task<ApiResponse<List<SopListResponse>>> GetPendingForApproverAsync(Guid approverId)
-        {
-            var levels = await _dal.GetApproverLevelsForEmployeeAsync(approverId);
-            if (!levels.Any()) return ApiResponse<List<SopListResponse>>.Ok(new());
-
-            var pendingStatuses = levels.Select(l => l switch
-            {
-                1 => (int)SopStatus.PendingApprovalLevel1,
-                2 => (int)SopStatus.PendingApprovalLevel2,
-                3 => (int)SopStatus.PendingApprovalLevel3,
-                _ => (int)SopStatus.PendingApprovalLevel1
-            }).ToList();
-
-            var result = new List<SopDetails>();
-            foreach (var status in pendingStatuses)
-                result.AddRange(await _dal.GetByStatusAsync(status));
-
-            return ApiResponse<List<SopListResponse>>.Ok(
-                result.DistinctBy(s => s.ID).Select(MapToListResponse).ToList());
-        }
-
-        public async Task<ApiResponse<bool>> ProcessApprovalAsync(ApprovalActionRequest request, Guid approverId)
-        {
-            var sop = await _dal.GetByIdAsync(request.SopID);
-            if (sop == null) return ApiResponse<bool>.Fail("SOP not found.");
-
-            var currentLevel = sop.ApprovalLevel;
-
-            // Validate approver is authorised for this level
-            if (!await _dal.IsApproverForLevelAsync(approverId, currentLevel))
-                return ApiResponse<bool>.Fail($"You are not authorised to approve at Level {currentLevel}.");
-
-            if (request.Action == ApprovalStatus.Rejected)
-            {
-                sop.ApprovalStatus = (int)SopStatus.Rejected;
-                sop.ModifiedByID = approverId;
-                await _dal.UpdateAsync(sop);
-
-                await AddApprovalRecord(sop.ID, currentLevel, (int)ApprovalStatus.Rejected,
-                    request.Comments, approverId, sop.SopDocumentVersion);
-                await AddSopHistory(sop, approverId);
-
-                return ApiResponse<bool>.Ok(true, $"SOP rejected at Level {currentLevel}. Returned to initiator.");
-            }
-
-            if (request.Action == ApprovalStatus.Approved)
-            {
-                await AddApprovalRecord(sop.ID, currentLevel, (int)ApprovalStatus.Approved,
-                    request.Comments, approverId, sop.SopDocumentVersion);
-
-                if (currentLevel >= AppConstants.MaxApprovalLevels)
+                SopId = sopId,
+                Steps = steps.Select(s => new SopTrackingStepResponse
                 {
-                    sop.ApprovalStatus = (int)SopStatus.Completed;
-                }
-                else
-                {
-                    var nextLevel = currentLevel + 1;
-                    sop.ApprovalLevel = nextLevel;
-                    sop.ApprovalStatus = nextLevel switch
-                    {
-                        2 => (int)SopStatus.PendingApprovalLevel2,
-                        3 => (int)SopStatus.PendingApprovalLevel3,
-                        _ => (int)SopStatus.PendingApprovalLevel1
-                    };
-                }
-
-                sop.ModifiedByID = approverId;
-                await _dal.UpdateAsync(sop);
-                await AddSopHistory(sop, approverId);
-
-                var msg = sop.ApprovalStatus == (int)SopStatus.Completed
-                    ? "SOP fully approved and marked as Completed."
-                    : $"SOP approved at Level {currentLevel}. Forwarded to Level {currentLevel + 1}.";
-
-                return ApiResponse<bool>.Ok(true, msg);
-            }
-
-            return ApiResponse<bool>.Fail("Invalid approval action.");
-        }
-
-        // ── PDF ────────────────────────────────────────────────────────────────
-
-        public async Task<ApiResponse<byte[]>> DownloadAsync(Guid id)
-        {
-            var sop = await _dal.GetByIdAsync(id);
-            if (sop == null) return ApiResponse<byte[]>.Fail("SOP not found.");
-
-            if (sop.ApprovalStatus != (int)SopStatus.Completed)
-                return ApiResponse<byte[]>.Fail("Only completed SOPs are available for download.");
-
-            if (string.IsNullOrEmpty(sop.SopDocument) || !File.Exists(sop.SopDocument))
-                return ApiResponse<byte[]>.Fail("Document file not found on server.");
-
-            var bytes = await File.ReadAllBytesAsync(sop.SopDocument);
-            return ApiResponse<byte[]>.Ok(bytes, "File ready.");
-        }
-
-        // ── WORKFLOW SETUP ─────────────────────────────────────────────────────
-
-        public async Task<ApiResponse<List<WorkflowStageResponse>>> GetWorkflowStagesAsync()
-        {
-            var stages = await _dal.GetAllWorkflowStagesAsync();
-            return ApiResponse<List<WorkflowStageResponse>>.Ok(stages.Select(MapToWorkflowResponse).ToList());
-        }
-
-        public async Task<ApiResponse<WorkflowStageResponse>> SetupWorkflowStageAsync(
-            SetupWorkflowStageRequest request, Guid createdBy)
-        {
-            var stage = new SopDetailsWorkFlowSetUp
-            {
-                StageName = request.StageName,
-                ApprovalLevel = request.ApprovalLevel,
-                IsSupervisor = request.IsSupervisor,
-                EmployeeGroupID = request.EmployeeGroupID,
-                CreatedByID = createdBy
-            };
-
-            var id = await _dal.CreateWorkflowStageAsync(stage);
-            stage.ID = id;
-
-            // Re-fetch to get group name
-            var saved = await _dal.GetWorkflowByLevelAsync(request.ApprovalLevel);
-            return ApiResponse<WorkflowStageResponse>.Ok(
-                MapToWorkflowResponse(saved ?? stage), "Workflow stage created.");
-        }
-
-        public async Task<ApiResponse<List<WorkflowStageResponse>>> BulkCreateWorkflowStagesAsync(
-            List<SetupWorkflowStageRequest> requests, Guid createdBy)
-        {
-            var results = new List<WorkflowStageResponse>();
-            foreach (var request in requests)
-            {
-                var stage = new SopDetailsWorkFlowSetUp
-                {
-                    StageName = request.StageName,
-                    ApprovalLevel = request.ApprovalLevel,
-                    IsSupervisor = request.IsSupervisor,
-                    EmployeeGroupID = request.EmployeeGroupID,
-                    CreatedByID = createdBy
-                };
-                var id = await _dal.CreateWorkflowStageAsync(stage);
-                stage.ID = id;
-                var saved = await _dal.GetWorkflowByLevelAsync(request.ApprovalLevel);
-                results.Add(MapToWorkflowResponse(saved ?? stage));
-            }
-            return ApiResponse<List<WorkflowStageResponse>>.Ok(results,
-                $"{results.Count} workflow stage(s) created.");
-        }
-
-        public async Task<ApiResponse<WorkflowStageResponse>> UpdateWorkflowStageAsync(
-            Guid id, SetupWorkflowStageRequest request, Guid modifiedBy)
-        {
-            var all = await _dal.GetAllWorkflowStagesAsync();
-            var existing = all.FirstOrDefault(w => w.ID == id);
-            if (existing == null)
-                return ApiResponse<WorkflowStageResponse>.Fail("Workflow stage not found.");
-
-            existing.StageName = request.StageName;
-            existing.ApprovalLevel = request.ApprovalLevel;
-            existing.IsSupervisor = request.IsSupervisor;
-            existing.EmployeeGroupID = request.EmployeeGroupID;
-            existing.ModifiedByID = modifiedBy;
-
-            await _dal.UpdateWorkflowStageAsync(existing);
-
-            var saved = await _dal.GetWorkflowByLevelAsync(existing.ApprovalLevel);
-            return ApiResponse<WorkflowStageResponse>.Ok(
-                MapToWorkflowResponse(saved ?? existing), "Workflow stage updated.");
-        }
-
-        public async Task<ApiResponse<bool>> DeleteWorkflowStageAsync(Guid id, Guid deletedBy)
-        {
-            var all = await _dal.GetAllWorkflowStagesAsync();
-            if (!all.Any(w => w.ID == id))
-                return ApiResponse<bool>.Fail("Workflow stage not found.");
-
-            await _dal.DeleteWorkflowStageAsync(id, deletedBy);
-            return ApiResponse<bool>.Ok(true, "Workflow stage deleted.");
-        }
-
-        // ── PRIVATE HELPERS ────────────────────────────────────────────────────
-
-        private async Task<string> SaveDocumentAsync(IFormFile file, Guid uploadedBy)
-        {
-            var uploadDir = Path.Combine("Uploads", "SOPs");
-            Directory.CreateDirectory(uploadDir);
-            var fileName = $"SOP_{Path.GetFileNameWithoutExtension(file.FileName)}_{DateTime.UtcNow:yyyyMMdd}_{Guid.NewGuid().ToString("N")[..8]}.pdf";
-            var fullPath = Path.Combine(uploadDir, fileName);
-            using var stream = new FileStream(fullPath, FileMode.Create);
-            await file.CopyToAsync(stream);
-            return fullPath;
-        }
-
-        private async Task AddSopHistory(SopDetails sop, Guid createdBy)
-        {
-            await _dal.AddHistoryAsync(new SopDetailsHistory
-            {
-                SopDetailsID = sop.ID,
-                Name = sop.SopTitle,
-                FileName = sop.SopDocument,
-                ApprovalStatus = sop.ApprovalStatus,
-                ApprovalLevel = sop.ApprovalLevel,
-                ExpiryDate = sop.ExpirationDate,
-                Remarks = sop.Remark,
-                CreatedByID = createdBy
-            });
-        }
-
-        private async Task AddApprovalRecord(Guid sopId, int level, int status,
-            string? comments, Guid actionBy, int version)
-        {
-            await _dal.AddApprovalHistoryAsync(new SopDetailsApprovalHistory
-            {
-                SopDetailsID = sopId,
-                ApprovalLevel = level,
-                ApprovalStatus = status,
-                Comments = comments,
-                ReferenceVersion = version,
-                CreatedByID = actionBy
-            });
-        }
-
-        private static SopListResponse MapToListResponse(SopDetails s) => new()
-        {
-            ID = s.ID,
-            SopTitle = s.SopTitle,
-            ExpirationDate = s.ExpirationDate,
-            Status = (SopStatus)s.ApprovalStatus,
-            CurrentApprovalLevel = s.ApprovalLevel,
-            DocumentVersion = s.SopDocumentVersion,
-            Created = s.Created
-        };
-
-        private static SopDetailResponse MapToDetailResponse(
-            SopDetails s,
-            List<SopDetailsApprovalHistory> approvalHistory,
-            List<SopDetailsHistory> versionHistory) => new()
-            {
-                ID = s.ID,
-                SopTitle = s.SopTitle,
-                SopDocument = s.SopDocument,
-                ExpirationDate = s.ExpirationDate,
-                Status = (SopStatus)s.ApprovalStatus,
-                CurrentApprovalLevel = s.ApprovalLevel,
-                DocumentVersion = s.SopDocumentVersion,
-                Remark = s.Remark,
-                Created = s.Created,
-                ApprovalHistory = approvalHistory.Select(ah => new SopApprovalHistoryResponse
-                {
-                    ID = ah.ID,
-                    ApprovalLevel = ah.ApprovalLevel,
-                    ApprovalStatus = ah.ApprovalStatus,
-                    Comments = ah.Comments,
-                    ActionDate = ah.Created
-                }).ToList(),
-                VersionHistory = versionHistory.Select(h => new SopVersionHistoryResponse
-                {
-                    ID = h.ID,
-                    Name = h.Name,
-                    FileName = h.FileName,
-                    Status = h.ApprovalStatus,
-                    ApprovalLevel = h.ApprovalLevel,
-                    ExpiryDate = h.ExpiryDate,
-                    Remarks = h.Remarks,
-                    Created = h.Created
+                    ID = s.ID,
+                    StageName = s.StageName,
+                    ApprovalLevel = s.ApprovalLevel,
+                    IsSupervisor = s.IsSupervisor,
+                    ApprovalStatus = s.ApprovalStatus,   // already SopApprovalStatus? — no cast
+                    ActionedOn = s.ActionedOn,
+                    ActionedByEmail = s.ActionedByEmail,
+                    Comments = s.Comments
                 }).ToList()
             };
+        }
 
-        private static WorkflowStageResponse MapToWorkflowResponse(SopDetailsWorkFlowSetUp wf) => new()
+        // ── GET SOPs PENDING MY APPROVAL ──
+        public async Task<SopListResponse> GetSopsForApproval(Guid userId, int? year)
         {
-            ID = wf.ID,
-            StageName = wf.StageName ?? string.Empty,
-            ApprovalLevel = wf.ApprovalLevel,
-            IsSupervisor = wf.IsSupervisor,
-            EmployeeGroupID = wf.EmployeeGroupID,
-            GroupName = wf.GroupName
-        };
+            var (total, data) = await _dal.GetSopsForApproval(
+                userId,
+                approvalStatus: (int)SopApprovalStatus.Pending,
+                year: year ?? 0);
+
+            return new SopListResponse
+            {
+                TotalCount = total,
+                Items = data.Select(SopDetailToResponse).ToList()
+            };
+        }
+
+        // ── GET SOPs I HAVE ACTIONED ──
+        public async Task<SopApprovalHistoryListResponse> GetSopsHistory(
+            Guid userId, int approvalStatus, int? year)
+        {
+            var (total, data) = await _dal.GetSopsHistory(userId, approvalStatus, year);
+
+            return new SopApprovalHistoryListResponse
+            {
+                TotalCount = total,
+                Items = data.Select(ApprovalHistoryToResponse).ToList()
+            };
+        }
+
+        // ── GET SOPs I CREATED ──
+        public async Task<SopListResponse> GetMySopsHistory(
+            Guid userId, int approvalStatus, int? year)
+        {
+            var (total, data) = await _dal.GetMySopsHistory(userId, approvalStatus, year);
+
+            return new SopListResponse
+            {
+                TotalCount = total,
+                Items = data.Select(SopDetailToResponse).ToList()
+            };
+        }
+
+        // ── GET ALL SOPs (admin/dashboard) ──
+        public async Task<SopListResponse> GetAllSops(int? approvalStatus, int? year)
+        {
+            var (total, data) = await _dal.GetAllSops(approvalStatus, year);
+
+            return new SopListResponse
+            {
+                TotalCount = total,
+                Items = data.Select(SopDetailToResponse).ToList()
+            };
+        }
+
+        // ── IS USER AN APPROVER ──
+        public Task<bool> IsUserApprover(Guid userId)
+            => _dal.IsUserApprover(userId);
+
+
+        // ─────────────────────────────────────────────
+        //  PRIVATE MAPPERS
+        //  SopDetail DM      → SopDetailResponse WM
+        //  SopApprovalHistory → SopApprovalHistoryResponse WM
+        // ─────────────────────────────────────────────
+
+        private static SopDetailResponse SopDetailToResponse(DataModel.SOP.SopDetail d)
+            => new()
+            {
+                ID = d.ID,
+                SopTitle = d.SopTitle,
+                ExpirationDate = d.ExpirationDate,
+                SopDocument = d.SopDocument,
+                SopDocumentVersion = d.SopDocumentVersion,
+                Remark = d.Remark,
+                ApprovalLevel = d.ApprovalLevel,
+                ApprovalStatus = d.ApprovalStatus,
+                Version = d.Version,
+                IsActive = d.IsActive,
+                IsDeleted = d.IsDeleted,
+                Created = d.Created,
+                CreatedByID = d.CreatedByID,
+                Modified = d.Modified,
+                ModifiedByID = d.ModifiedByID
+            };
+
+        private static SopApprovalHistoryResponse ApprovalHistoryToResponse(
+            DataModel.SOP.SopApprovalHistory ah)
+            => new()
+            {
+                SopDetailsID = ah.SopDetailsID,
+                ApprovalLevel = ah.ApprovalLevel,
+                ApprovalStatus = ah.ApprovalStatus,
+                Comments = ah.Comments,
+                ActionedOn = ah.Created       // AH.Created = timestamp of the action
+            };
     }
 }

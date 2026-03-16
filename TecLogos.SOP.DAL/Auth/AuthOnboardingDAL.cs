@@ -84,7 +84,7 @@ namespace TecLogos.SOP.DAL.Auth
             if (isUsed)
                 return (null, "Invite already used");
 
-            if (expiry < DateTime.UtcNow)
+            if (expiry < DateTime.Now)
                 return (null, "Invite expired");
 
             return (GetGuid(reader, "EmployeeID"), null);

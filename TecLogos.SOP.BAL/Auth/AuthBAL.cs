@@ -95,7 +95,7 @@ namespace TecLogos.SOP.BAL.Auth
                 Success = true,
                 Token = jwtToken,
                 RefreshToken = refreshToken,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtExpirationMinutes),
+                ExpiresAt = DateTime.Now.AddMinutes(_jwtExpirationMinutes),
                 User = new AuthUserDto
                 {
                     Id = employee.ID,
@@ -142,7 +142,7 @@ namespace TecLogos.SOP.BAL.Auth
                 Success = true,
                 Token = newJwt,
                 RefreshToken = newRefresh,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(_jwtExpirationMinutes),
+                ExpiresAt = DateTime.Now.AddMinutes(_jwtExpirationMinutes),
                 User = new AuthUserDto
                 {
                     Id = profile.ID,
@@ -212,7 +212,7 @@ namespace TecLogos.SOP.BAL.Auth
                 issuer: _jwtIssuer,
                 audience: _jwtAudience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(_jwtExpirationMinutes),
+                expires: DateTime.Now.AddMinutes(_jwtExpirationMinutes),
                 signingCredentials: credentials
             );
 

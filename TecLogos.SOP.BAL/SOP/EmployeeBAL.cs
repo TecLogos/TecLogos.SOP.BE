@@ -82,7 +82,7 @@ namespace TecLogos.SOP.BAL.SOP
                 RoleID = employee.RoleID == Guid.Empty ? null : employee.RoleID,
                 IsActive = true,
                 IsDeleted = false,
-                Created = DateTime.UtcNow,
+                Created = DateTime.Now,
                 CreatedByID = createdByID
             };
 

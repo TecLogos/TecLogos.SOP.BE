@@ -332,7 +332,7 @@ namespace TecLogos.SOP.WebApi.Controllers.Auth
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddDays(7),
+                Expires = DateTime.Now.AddDays(7),
                 Path = "/"
             };
 

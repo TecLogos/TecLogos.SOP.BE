@@ -232,7 +232,7 @@ AND ExpiresAt > GETUTCDATE()
             cmd.Parameters.Add("@ID", SqlDbType.UniqueIdentifier).Value = Guid.NewGuid();
             cmd.Parameters.Add("@EmployeeID", SqlDbType.UniqueIdentifier).Value = employeeId;
             cmd.Parameters.Add("@Token", SqlDbType.NVarChar, 255).Value = refreshToken;
-            cmd.Parameters.Add("@ExpiresAt", SqlDbType.DateTime2).Value = DateTime.UtcNow.AddDays(expirationDays);
+            cmd.Parameters.Add("@ExpiresAt", SqlDbType.DateTime2).Value = DateTime.Now.AddDays(expirationDays);
             cmd.Parameters.Add("@Ip", SqlDbType.NVarChar, 45).Value = ipAddress;
             cmd.Parameters.Add("@CreatedByID", SqlDbType.UniqueIdentifier).Value = employeeId;
 
