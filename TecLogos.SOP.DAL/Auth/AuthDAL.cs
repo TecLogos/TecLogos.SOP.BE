@@ -86,34 +86,90 @@ namespace TecLogos.SOP.DAL.Auth
 
         public async Task<List<Role>> GetEmployeeRoles(Guid employeeId)
         {
-            const string sql =
-            @"
-    SELECT r.ID AS RoleID, r.Name AS RoleName
-    FROM EmployeeRole er WITH(NOLOCK)
-    INNER JOIN Role r WITH(NOLOCK) ON r.ID = er.RoleID
-    WHERE er.EmployeeID = @EmployeeID
-      AND er.IsDeleted = 0
-      AND er.IsActive = 1
-      AND r.IsDeleted = 0
-      AND r.IsActive = 1
-    ";
+            // ── Step 1: Try explicit EmployeeRole assignment (Admin has this) ─────────
+            const string explicitRoleSql = @"
+        SELECT r.ID AS RoleID, r.Name AS RoleName
+        FROM   [EmployeeRole] er WITH(NOLOCK)
+        INNER JOIN [Role] r WITH(NOLOCK) ON r.ID = er.RoleID
+        WHERE  er.EmployeeID = @EmployeeID
+          AND  er.IsDeleted  = 0
+          AND  er.IsActive   = 1
+          AND  r.IsDeleted   = 0
+          AND  r.IsActive    = 1;";
 
             var roles = new List<Role>();
 
             using var conn = await GetOpenConnectionAsync();
-            using var cmd = new SqlCommand(sql, conn);
+            using var cmd1 = new SqlCommand(explicitRoleSql, conn);
+            cmd1.Parameters.Add("@EmployeeID", SqlDbType.UniqueIdentifier).Value = employeeId;
 
-            cmd.Parameters.Add("@EmployeeID", SqlDbType.UniqueIdentifier).Value = employeeId;
-
-            using var reader = await cmd.ExecuteReaderAsync();
-
-            while (await reader.ReadAsync())
+            using var reader1 = await cmd1.ExecuteReaderAsync();
+            while (await reader1.ReadAsync())
             {
                 roles.Add(new Role
                 {
-                    RoleID = GetGuid(reader, "RoleID"),
-                    RoleName = GetString(reader, "RoleName")
+                    RoleID = (Guid)reader1["RoleID"],
+                    RoleName = reader1["RoleName"]?.ToString() ?? string.Empty
                 });
+            }
+            reader1.Close();
+
+            // If explicit role found (e.g. Admin), return immediately
+            if (roles.Count > 0)
+                return roles;
+
+            // ── Step 2: Derive role from EmployeeGroup membership ────────────────────
+            //
+            //  Join chain:
+            //    EmployeeGroupDetail (EGD) → EmployeeGroup (EG) → SopDetailsWorkFlowSetUp (WF)
+            //
+            //  Mapping logic (matches seed data + workflow setup):
+            //    WF.IsSupervisor = 1            → "Supervisor"
+            //    WF.ApprovalLevel = 1           → "Initiator"   (In Progress stage group)
+            //    WF.ApprovalLevel IN (3, 4, 5)  → "Approver"    (L1/L2/L3 approver groups)
+            //    WF.ApprovalLevel = 0           → "Admin"        (Admin group fallback)
+            //
+            const string derivedRoleSql = @"
+        SELECT DISTINCT
+            CASE
+                WHEN WF.IsSupervisor = 1        THEN 'Supervisor'
+                WHEN WF.ApprovalLevel = 1        THEN 'Initiator'
+                WHEN WF.ApprovalLevel IN (3,4,5) THEN 'Approver'
+                WHEN WF.ApprovalLevel = 0        THEN 'Admin'
+                ELSE                                  'Initiator'
+            END AS DerivedRole
+        FROM   [EmployeeGroupDetail] EGD WITH(NOLOCK)
+        INNER JOIN [EmployeeGroup]            EG  WITH(NOLOCK)
+               ON  EG.ID        = EGD.EmployeeGroupID
+              AND  EG.IsDeleted  = 0
+        INNER JOIN [SopDetailsWorkFlowSetUp]  WF  WITH(NOLOCK)
+               ON  WF.EmployeeGroupID = EG.ID
+              AND  WF.IsDeleted       = 0
+        WHERE  EGD.EmployeeID = @EmployeeID
+          AND  EGD.IsDeleted  = 0
+          AND  EGD.IsActive   = 1;";
+
+            using var cmd2 = new SqlCommand(derivedRoleSql, conn);
+            cmd2.Parameters.Add("@EmployeeID", SqlDbType.UniqueIdentifier).Value = employeeId;
+
+            using var reader2 = await cmd2.ExecuteReaderAsync();
+
+            // Take the first derived role (employees should be in one functional group)
+            if (await reader2.ReadAsync())
+            {
+                var derivedRoleName = reader2["DerivedRole"]?.ToString() ?? "Initiator";
+                roles.Add(new Role
+                {
+                    RoleID = Guid.Empty,         // no real Role row — derived from group
+                    RoleName = derivedRoleName
+                });
+            }
+            reader2.Close();
+
+            // Final fallback — should never happen, but prevents null role edge case
+            if (roles.Count == 0)
+            {
+                roles.Add(new Role { RoleID = Guid.Empty, RoleName = "Initiator" });
             }
 
             return roles;
@@ -285,38 +341,38 @@ AND ExpiresAt > GETUTCDATE()
         // PROFILE
         public async Task<AuthEmployee?> GetUserProfile(Guid employeeId)
         {
-            const string sql =
-                @"
+            const string sql = @"
         SELECT
             e.ID,
             e.Email,
             e.MobileNumber,
             e.FirstName,
             e.LastName
-        FROM Employee e WITH(NOLOCK)
-        WHERE e.ID = @ID
-          AND e.IsDeleted = 0
-        ";
+        FROM [Employee] e WITH(NOLOCK)
+        WHERE e.ID        = @ID
+          AND e.IsDeleted = 0;";
 
             using var conn = await GetOpenConnectionAsync();
             using var cmd = new SqlCommand(sql, conn);
-
             cmd.Parameters.AddWithValue("@ID", employeeId);
 
             using var reader = await cmd.ExecuteReaderAsync();
-
             if (!await reader.ReadAsync())
                 return null;
 
-            return new AuthEmployee
+            var profile = new AuthEmployee
             {
                 ID = GetGuid(reader, "ID"),
                 FullName = $"{GetString(reader, "FirstName")} {GetString(reader, "LastName")}",
-                Email = GetString(reader, "Email"),
-                MobileNumber = GetString(reader, "MobileNumber")
+                Email = GetString(reader, "Email") ?? string.Empty,
+                MobileNumber = GetString(reader, "MobileNumber") ?? string.Empty,
             };
-        }
+            reader.Close();
 
+            // Roles are populated by AuthBAL.GetUserProfile → _authDAL.GetEmployeeRoles
+            // (AuthBAL already calls GetEmployeeRoles and sets profile.Roles)
+            return profile;
+        }
         #region Private Helpers
         private static string? GetString(SqlDataReader reader, string column)
         {

@@ -36,7 +36,7 @@ namespace TecLogos.SOP.BAL.SOP
                 throw new Exception("SOP Title is required.");
 
             // ExpirationDate is optional (null = evergreen SOP)
-            if (request.ExpirationDate.HasValue && request.ExpirationDate.Value <= DateTime.UtcNow)
+            if (request.ExpirationDate <= DateTime.UtcNow)
                 throw new Exception("Expiration date must be a future date.");
 
             var dm = new DataModel.SOP.SopDetail

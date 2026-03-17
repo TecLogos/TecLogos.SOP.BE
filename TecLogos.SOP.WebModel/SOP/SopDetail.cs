@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using TecLogos.SOP.EnumsAndConstants;
 using TecLogos.SOP.WebModel.Base;
 
@@ -7,9 +8,9 @@ namespace TecLogos.SOP.WebModel.SOP
     public class CreateSopRequest
     {
         public string? SopTitle { get; set; }
-        public DateTime? ExpirationDate { get; set; }  // optional — leave null for evergreen
-        public string? SopDocument { get; set; }  // optional — can upload later
-        public string? Remark { get; set; }
+        public DateTime? ExpirationDate { get; set; }
+        public string? Remark { get; set; }  
+        public IFormFile? DocumentFile { get; set; } 
     }
 
     // ── PUT: Approve or Reject ──
@@ -20,14 +21,14 @@ namespace TecLogos.SOP.WebModel.SOP
 
     public class SopDetailResponse : BaseModel
     {
-        public string? SopTitle { get; set; }
-        public DateTime? ExpirationDate { get; set; }
-        public string? SopDocument { get; set; }
+        public string SopTitle { get; set; }
+        public DateTime ExpirationDate { get; set; }
+        public string SopDocument { get; set; }
         public int SopDocumentVersion { get; set; }
         public string? Remark { get; set; }
         public int ApprovalLevel { get; set; }
-        public SopApprovalStatus? ApprovalStatus { get; set; }
-        public string? ApprovalStatusLabel => ApprovalStatus switch
+        public SopApprovalStatus ApprovalStatus { get; set; }
+        public string ApprovalStatusLabel => ApprovalStatus switch
         {
             SopApprovalStatus.Pending => "Pending",
             SopApprovalStatus.Approved => "Approved",
@@ -42,10 +43,10 @@ namespace TecLogos.SOP.WebModel.SOP
     public class SopApprovalHistoryResponse
     {
         public Guid SopDetailsID { get; set; }
-        public string? SopTitle { get; set; }
-        public DateTime? ExpirationDate { get; set; }
-        public string? SopDocument { get; set; }
-        public string? Remark { get; set; }
+        public string SopTitle { get; set; }
+        public DateTime ExpirationDate { get; set; }
+        public string SopDocument { get; set; }
+        public string Remark { get; set; }
 
         // From [SopDetailsApprovalHistory]
         public int ApprovalLevel { get; set; }
@@ -78,12 +79,12 @@ namespace TecLogos.SOP.WebModel.SOP
     public class SopTrackingStepResponse
     {
         public Guid ID { get; set; }
-        public string? StageName { get; set; }
+        public string StageName { get; set; }
         public int ApprovalLevel { get; set; }
         public bool IsSupervisor { get; set; }
 
         // Null = stage not yet reached
-        public SopApprovalStatus? ApprovalStatus { get; set; }
+        public SopApprovalStatus ApprovalStatus { get; set; }
         public string? Comments { get; set; }
         public DateTime? ActionedOn { get; set; }
         public string? ActionedByEmail { get; set; }
@@ -106,11 +107,11 @@ namespace TecLogos.SOP.WebModel.SOP
     public class WorkFlowSetUpResponse
     {
         public Guid ID { get; set; }
-        public string? StageName { get; set; }
+        public string StageName { get; set; }
         public int ApprovalLevel { get; set; }   // 0–5
         public bool IsSupervisor { get; set; }
-        public Guid? EmployeeGroupID { get; set; }   // NULL for supervisor stage
-        public string? GroupName { get; set; }   // joined from EmployeeGroup.Name
+        public Guid EmployeeGroupID { get; set; }   // NULL for supervisor stage
+        public string GroupName { get; set; }   // joined from EmployeeGroup.Name
 
         // Human-readable labels for the frontend
         public string ApprovalLevelLabel => ApprovalLevel switch
@@ -130,10 +131,10 @@ namespace TecLogos.SOP.WebModel.SOP
     // ── Request: create a single stage ───────────────────────────────────────
     public class CreateWorkFlowStageRequest
     {
-        public string? StageName { get; set; }   // required
+        public string StageName { get; set; }   // required
         public int ApprovalLevel { get; set; }   // 0–5
         public bool IsSupervisor { get; set; }
-        public Guid? EmployeeGroupID { get; set; }   // required when IsSupervisor=false
+        public Guid EmployeeGroupID { get; set; }   // required when IsSupervisor=false
     }
 
     // ── Request: update an existing stage ────────────────────────────────────
@@ -142,6 +143,6 @@ namespace TecLogos.SOP.WebModel.SOP
         public string? StageName { get; set; }
         public int ApprovalLevel { get; set; }
         public bool IsSupervisor { get; set; }
-        public Guid? EmployeeGroupID { get; set; }
+        public Guid EmployeeGroupID { get; set; }
     }
 }

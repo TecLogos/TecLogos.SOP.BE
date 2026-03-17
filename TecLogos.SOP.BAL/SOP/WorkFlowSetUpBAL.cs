@@ -65,7 +65,7 @@ namespace TecLogos.SOP.BAL.SOP
                 StageName = request.StageName!.Trim(),
                 ApprovalLevel = request.ApprovalLevel,
                 IsSupervisor = request.IsSupervisor,
-                EmployeeGroupID = request.IsSupervisor ? null : request.EmployeeGroupID,
+                EmployeeGroupID = request.EmployeeGroupID,
                 CreatedByID = userId,
             };
 
@@ -101,7 +101,7 @@ namespace TecLogos.SOP.BAL.SOP
             existing.StageName = request.StageName!.Trim();
             existing.ApprovalLevel = request.ApprovalLevel;
             existing.IsSupervisor = request.IsSupervisor;
-            existing.EmployeeGroupID = request.IsSupervisor ? null : request.EmployeeGroupID;
+            existing.EmployeeGroupID = request.EmployeeGroupID;
             existing.ModifiedByID = userId;
 
             _logger.LogInformation("BAL: Updating WorkFlowStage {Id}", id);
@@ -142,9 +142,8 @@ namespace TecLogos.SOP.BAL.SOP
                 StageName = s.StageName,
                 ApprovalLevel = s.ApprovalLevel,
                 IsSupervisor = s.IsSupervisor,
-                EmployeeGroupID = s.EmployeeGroupID,
-                GroupName = s.EmployeeGroupID.HasValue && groupMap.TryGetValue(s.EmployeeGroupID.Value, out var name)
-                                ? name : null,
+                EmployeeGroupID = s.EmployeeGroupID
+
             };
     }
 }
