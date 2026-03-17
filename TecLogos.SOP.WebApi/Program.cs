@@ -230,6 +230,10 @@ namespace TecLogos.SOP.WebApi
             //  SOP Detail
             builder.Services.AddScoped<ISopDetailBAL, SopDetailBAL>();
             builder.Services.AddScoped<ISopDetailDAL, SopDetailDAL>();
+
+            // WorkFlowSetUp
+            builder.Services.AddScoped<IWorkFlowSetUpDAL, WorkFlowSetUpDAL>();
+            builder.Services.AddScoped<IWorkFlowSetUpBAL, WorkFlowSetUpBAL>();
         }
     }
 }

@@ -2,10 +2,6 @@ using TecLogos.SOP.EnumsAndConstants;
 
 namespace TecLogos.SOP.DataModel.SOP
 {
-    // ── Maps exactly to [SopDetails] table ──
-    // No joined/computed fields here.
-    // Queries that need extra context (email, comments)
-    // use dedicated response models, not this DM.
     public class SopDetail
     {
         public Guid ID { get; set; } = Guid.NewGuid();
@@ -29,7 +25,6 @@ namespace TecLogos.SOP.DataModel.SOP
         public Guid? DeletedByID { get; set; }
     }
 
-    // ── Maps to [SopDetailsApprovalHistory] table ──
     public class SopApprovalHistory
     {
         public Guid ID { get; set; }
@@ -50,10 +45,6 @@ namespace TecLogos.SOP.DataModel.SOP
         public DateTime? Deleted { get; set; }
         public Guid? DeletedByID { get; set; }
     }
-
-    // ── Used only for GetSopTracking dual-resultset merge ──
-    // Combines SopDetailsWorkFlowSetUp (structure)
-    // with SopDetailsApprovalHistory (what happened)
     public class SopTrackingStep
     {
         // From [SopDetailsWorkFlowSetUp]
@@ -67,5 +58,23 @@ namespace TecLogos.SOP.DataModel.SOP
         public string? Comments { get; set; }
         public DateTime? ActionedOn { get; set; } // = AH.Created
         public string? ActionedByEmail { get; set; } // = joined Employee.Email
+    }
+
+    public class WorkFlowSetUp
+    {
+        public Guid ID { get; set; }
+        public string? StageName { get; set; }
+        public int ApprovalLevel { get; set; }
+        public bool IsSupervisor { get; set; }
+        public Guid? EmployeeGroupID { get; set; }   // NULL is valid for supervisor stage
+
+        // Audit columns (from BaseModel pattern)
+        public int Version { get; set; } = 1;
+        public bool IsActive { get; set; } = true;
+        public bool IsDeleted { get; set; } = false;
+        public DateTime Created { get; set; }
+        public Guid CreatedByID { get; set; }
+        public DateTime? Modified { get; set; }
+        public Guid? ModifiedByID { get; set; }
     }
 }

@@ -18,9 +18,6 @@ namespace TecLogos.SOP.WebModel.SOP
         public string? Comments { get; set; }  // required on reject, optional on approve
     }
 
-    // ── Response: SOP list item ──
-    // Used in: pending-list, my-history
-    // Only carries columns that live in [SopDetails] + one joined Email
     public class SopDetailResponse : BaseModel
     {
         public string? SopTitle { get; set; }
@@ -42,9 +39,6 @@ namespace TecLogos.SOP.WebModel.SOP
         public string? CreatedByEmail { get; set; }
     }
 
-    // ── Response: Approver history list item ──
-    // Used in: approver-history
-    // Carries columns from [SopDetailsApprovalHistory] joined with [SopDetails]
     public class SopApprovalHistoryResponse
     {
         public Guid SopDetailsID { get; set; }
@@ -107,5 +101,47 @@ namespace TecLogos.SOP.WebModel.SOP
     {
         public Guid SopId { get; set; }
         public List<SopTrackingStepResponse> Steps { get; set; } = new();
+    }
+
+    public class WorkFlowSetUpResponse
+    {
+        public Guid ID { get; set; }
+        public string? StageName { get; set; }
+        public int ApprovalLevel { get; set; }   // 0–5
+        public bool IsSupervisor { get; set; }
+        public Guid? EmployeeGroupID { get; set; }   // NULL for supervisor stage
+        public string? GroupName { get; set; }   // joined from EmployeeGroup.Name
+
+        // Human-readable labels for the frontend
+        public string ApprovalLevelLabel => ApprovalLevel switch
+        {
+            0 => "Not Started",
+            1 => "In Progress",
+            2 => "Submitted",
+            3 => "Level 1",
+            4 => "Level 2",
+            5 => "Level 3",
+            _ => $"Level {ApprovalLevel}"
+        };
+
+        public string TypeLabel => IsSupervisor ? "Supervisor" : "Approver";
+    }
+
+    // ── Request: create a single stage ───────────────────────────────────────
+    public class CreateWorkFlowStageRequest
+    {
+        public string? StageName { get; set; }   // required
+        public int ApprovalLevel { get; set; }   // 0–5
+        public bool IsSupervisor { get; set; }
+        public Guid? EmployeeGroupID { get; set; }   // required when IsSupervisor=false
+    }
+
+    // ── Request: update an existing stage ────────────────────────────────────
+    public class UpdateWorkFlowStageRequest
+    {
+        public string? StageName { get; set; }
+        public int ApprovalLevel { get; set; }
+        public bool IsSupervisor { get; set; }
+        public Guid? EmployeeGroupID { get; set; }
     }
 }
