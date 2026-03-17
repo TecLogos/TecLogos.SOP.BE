@@ -124,6 +124,16 @@ namespace TecLogos.SOP.WebApi
 
             builder.Services.AddControllers();
 
+            // ── Raise multipart upload limit to 50 MB (default is 30 MB) ─────
+            builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(o =>
+            {
+                o.MultipartBodyLengthLimit = 52_428_800; // 50 MB
+            });
+            builder.WebHost.ConfigureKestrel(k =>
+            {
+                k.Limits.MaxRequestBodySize = 52_428_800; // 50 MB
+            });
+
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
             {
@@ -180,6 +190,18 @@ namespace TecLogos.SOP.WebApi
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();
+
+            // ── Serve Uploads folder as static files ──────────────────────────
+            // Allows direct URL access:
+            //   GET /Uploads/Sop-Detail/{sopId}/SopDocument/V1/filename.pdf
+            var uploadsRoot = Path.Combine(builder.Environment.ContentRootPath, "Uploads");
+            Directory.CreateDirectory(uploadsRoot);   // ensure folder exists on startup
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsRoot),
+                RequestPath = "/Uploads"
+            });
+
             app.Run();
         }
 
@@ -230,6 +252,9 @@ namespace TecLogos.SOP.WebApi
             //  SOP Detail
             builder.Services.AddScoped<ISopDetailBAL, SopDetailBAL>();
             builder.Services.AddScoped<ISopDetailDAL, SopDetailDAL>();
+
+            //  File Storage (SOP document upload)
+            builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 
             // WorkFlowSetUp
             builder.Services.AddScoped<IWorkFlowSetUpDAL, WorkFlowSetUpDAL>();

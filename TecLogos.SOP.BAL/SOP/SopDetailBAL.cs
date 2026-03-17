@@ -16,6 +16,8 @@ namespace TecLogos.SOP.BAL.SOP
         Task<SopListResponse> GetMySopsHistory(Guid userId, int approvalStatus, int? year);
         Task<SopListResponse> GetAllSops(int? approvalStatus, int? year);
         Task<bool> IsUserApprover(Guid userId);
+        Task UpdateSopDocument(Guid sopId, string relativePath);
+        Task<string?> GetSopDocumentPath(Guid sopId);
     }
 
     public class SopDetailBAL : ISopDetailBAL
@@ -36,7 +38,7 @@ namespace TecLogos.SOP.BAL.SOP
                 throw new Exception("SOP Title is required.");
 
             // ExpirationDate is optional (null = evergreen SOP)
-            if (request.ExpirationDate <= DateTime.UtcNow)
+            if (request.ExpirationDate.HasValue && request.ExpirationDate.Value <= DateTime.UtcNow)
                 throw new Exception("Expiration date must be a future date.");
 
             var dm = new DataModel.SOP.SopDetail
@@ -44,7 +46,7 @@ namespace TecLogos.SOP.BAL.SOP
                 ID = Guid.NewGuid(),
                 SopTitle = request.SopTitle.Trim(),
                 ExpirationDate = request.ExpirationDate,
-                SopDocument = request.SopDocument,
+                SopDocument = null,          // populated after file save via UpdateSopDocument()
                 Remark = request.Remark,
                 ApprovalLevel = 0,                        // Not Started
                 ApprovalStatus = SopApprovalStatus.Pending,
@@ -198,5 +200,17 @@ namespace TecLogos.SOP.BAL.SOP
                 Comments = ah.Comments,
                 ActionedOn = ah.Created       // AH.Created = timestamp of the action
             };
+
+
+        // ── UPDATE SOP DOCUMENT ───────────────────────────────────────────────
+        public async Task UpdateSopDocument(Guid sopId, string relativePath)
+        {
+            await _dal.UpdateSopDocument(sopId, relativePath);
+            _logger.LogInformation("BAL: SopDocument updated for {SopId} → {Path}", sopId, relativePath);
+        }
+
+        // ── GET SOP DOCUMENT PATH ─────────────────────────────────────────────
+        public async Task<string?> GetSopDocumentPath(Guid sopId)
+            => await _dal.GetSopDocumentPath(sopId);
     }
 }

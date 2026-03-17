@@ -18,6 +18,8 @@ namespace TecLogos.SOP.DAL.SOP
         Task<(int totalCount, List<SopDetail>)> GetMySopsHistory(Guid userId, int approvalStatus, int? year);
         Task<(int totalCount, List<SopDetail>)> GetAllSops(int? approvalStatus, int? year);
         Task<bool> IsUserApprover(Guid userId);
+        Task UpdateSopDocument(Guid sopId, string relativePath);
+        Task<string?> GetSopDocumentPath(Guid sopId);
     }
 
     public class SopDetailDAL : ISopDetailDAL
@@ -34,12 +36,12 @@ namespace TecLogos.SOP.DAL.SOP
         private SqlConnection CreateConnection() => new(_connectionString);
 
 
-        
+
         //  CREATE SOP
         //  Inserts into SopDetails + SopDetailsHistory
         //  ApprovalLevel = 0 (Not Started)
         //  ApprovalStatus = 0 (Pending)
-        
+
         public async Task<Guid> CreateSop(SopDetail sop)
         {
             const string sql = @"
@@ -75,7 +77,7 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        
+
         //  APPROVE SOP  (one-shot query pattern)
         //
         //  Workflow levels: 0=NotStarted 1=InProgress
@@ -92,7 +94,7 @@ namespace TecLogos.SOP.DAL.SOP
         //       - If NextLevel >= MaxLevel → ApprovalStatus = 3 (Completed)
         //       - Otherwise ApprovalStatus stays 0 (Pending)
         //    6. Write snapshot to SopDetailsApprovalHistory
-        
+
         public async Task<bool> ApproveSop(Guid sopId, Guid approverId, string? comments)
         {
             const string sql = @"
@@ -183,7 +185,7 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        
+
         //  REJECT SOP  (one-shot query pattern)
         //
         //  Logic:
@@ -193,7 +195,7 @@ namespace TecLogos.SOP.DAL.SOP
         //    3. Write rejection row to SopDetailsApprovalHistory
         //    Note: Rejected SOP returns to initiator (Level 1)
         //          Frontend handles reassignment — DB records the rejection
-        
+
         public async Task<bool> RejectSop(Guid sopId, Guid approverId, string? comments)
         {
             const string sql = @"
@@ -245,7 +247,7 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        
+
         //  GET SOP TRACKING  (dual result-set pattern)
         //
         //  Result Set 1 → All workflow stages (structure)
@@ -253,7 +255,7 @@ namespace TecLogos.SOP.DAL.SOP
         //  Result Set 2 → Actioned history rows
         //                 from SopDetailsApprovalHistory
         //  Merged in C# by ApprovalLevel key
-        
+
         public async Task<List<SopTrackingStep>> GetSopTracking(Guid sopId)
         {
             const string sql = @"
@@ -329,9 +331,7 @@ namespace TecLogos.SOP.DAL.SOP
             {
                 if (historyMap.TryGetValue(step.ApprovalLevel, out var h))
                 {
-                    step.ApprovalStatus = h.Status.HasValue
-                                            ? (SopApprovalStatus?)(SopApprovalStatus)h.Status.Value
-                                            : null;
+                    step.ApprovalStatus = h.Status.HasValue ? (SopApprovalStatus?)h.Status.Value : null;
                     step.ActionedOn = h.ActionedOn;
                     step.ActionedByEmail = h.Email;
                     step.Comments = h.Comments;
@@ -342,7 +342,7 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        
+
         //  GET SOPs FOR APPROVAL
         //
         //  Returns SOPs where logged user is the NEXT
@@ -350,7 +350,7 @@ namespace TecLogos.SOP.DAL.SOP
         //    - IsSupervisor=1 → user is ManagerID of SOP creator
         //    - IsSupervisor=0 → user is in the group for that level
         //  Only Pending SOPs (ApprovalStatus = 0)
-        
+
         public async Task<(int totalCount, List<SopDetail>)> GetSopsForApproval(
             Guid loggedUserId, int approvalStatus, int year)
         {
@@ -409,13 +409,13 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        
+
         //  GET SOPs HISTORY  (actions I have taken)
         //
         //  Returns rows from SopDetailsApprovalHistory
         //  where CreatedByID = logged user.
         //  Joined to SopDetails for title/document context.
-        
+
         public async Task<(int totalCount, List<SopApprovalHistory>)> GetSopsHistory(
             Guid userId, int approvalStatus, int? year)
         {
@@ -469,12 +469,12 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        
+
         //  GET MY SOPs HISTORY  (SOPs I created)
         //
         //  Returns SopDetails rows where CreatedByID = userId.
         //  Shows current stage/status of each SOP I submitted.
-        
+
         public async Task<(int totalCount, List<SopDetail>)> GetMySopsHistory(
             Guid userId, int approvalStatus, int? year)
         {
@@ -517,13 +517,13 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        
+
         //  GET ALL SOPs  (admin/dashboard view)
         //
         //  Returns all non-deleted SOPs.
         //  Optionally filtered by ApprovalStatus and/or Year.
         //  NULL filters = return everything.
-        
+
         public async Task<(int totalCount, List<SopDetail>)> GetAllSops(
             int? approvalStatus, int? year)
         {
@@ -564,13 +564,13 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        
+
         //  IS USER APPROVER
         //
         //  Check 1: group-based → in any non-supervisor
         //           workflow group
         //  Check 2: supervisor  → has direct reports
-        
+
         public async Task<bool> IsUserApprover(Guid userId)
         {
             const string groupSql = @"
@@ -602,10 +602,10 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        
+
         //  PRIVATE: Map SopDetail from reader
         //  Only columns that exist in [SopDetails]
-        
+
         private static SopDetail MapSopDetail(SqlDataReader r, string levelColumn)
             => new()
             {
@@ -625,9 +625,9 @@ namespace TecLogos.SOP.DAL.SOP
             };
 
 
-        
+
         //  PRIVATE: Null-safe reader helpers
-        
+
         private static string? ReadString(SqlDataReader r, string col) { var o = r.GetOrdinal(col); return r.IsDBNull(o) ? null : r.GetString(o); }
         private static DateTime? ReadDateTime(SqlDataReader r, string col) { var o = r.GetOrdinal(col); return r.IsDBNull(o) ? null : r.GetDateTime(o); }
         private static int? ReadInt(SqlDataReader r, string col) { var o = r.GetOrdinal(col); return r.IsDBNull(o) ? null : r.GetInt32(o); }
@@ -640,6 +640,47 @@ namespace TecLogos.SOP.DAL.SOP
             if (r.IsDBNull(o)) return null;
             var intValue = r.GetInt32(o);       // step 1: unbox to int
             return (T)(object)intValue;          // step 2: int → enum (T? wraps implicitly)
+        }
+
+
+        // ── UPDATE SOP DOCUMENT PATH ──────────────────────────────────────────
+        // Called after the file has been saved to disk.
+        // Stores: "Uploads/Sop-Detail/{sopId}/SopDocument/V1/filename.pdf"
+        public async Task UpdateSopDocument(Guid sopId, string relativePath)
+        {
+            const string sql = @"
+                UPDATE [SopDetails]
+                SET    SopDocument = @SopDocument,
+                       Modified    = GETDATE()
+                WHERE  ID          = @SopID
+                  AND  IsDeleted   = 0;";
+
+            using var conn = CreateConnection();
+            await conn.OpenAsync();
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.Add("@SopID", SqlDbType.UniqueIdentifier).Value = sopId;
+            cmd.Parameters.Add("@SopDocument", SqlDbType.NVarChar).Value = relativePath;
+            await cmd.ExecuteNonQueryAsync();
+            _logger.LogInformation("DAL: SopDocument path updated. SopID={SopId}", sopId);
+        }
+
+        // ── GET SOP DOCUMENT PATH ─────────────────────────────────────────────
+        // Returns the relative path stored in [SopDetails].[SopDocument].
+        // Returns null if no document has been uploaded yet.
+        public async Task<string?> GetSopDocumentPath(Guid sopId)
+        {
+            const string sql = @"
+                SELECT SopDocument
+                FROM   [SopDetails]
+                WHERE  ID        = @SopID
+                  AND  IsDeleted = 0;";
+
+            using var conn = CreateConnection();
+            await conn.OpenAsync();
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.Add("@SopID", SqlDbType.UniqueIdentifier).Value = sopId;
+            var result = await cmd.ExecuteScalarAsync();
+            return result == DBNull.Value ? null : result?.ToString();
         }
     }
 }

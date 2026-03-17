@@ -9,8 +9,8 @@ namespace TecLogos.SOP.WebModel.SOP
     {
         public string? SopTitle { get; set; }
         public DateTime? ExpirationDate { get; set; }
-        public string? Remark { get; set; }  
-        public IFormFile? DocumentFile { get; set; } 
+        public string? Remark { get; set; }
+        public IFormFile? DocumentFile { get; set; }
     }
 
     // ── PUT: Approve or Reject ──
@@ -21,18 +21,21 @@ namespace TecLogos.SOP.WebModel.SOP
 
     public class SopDetailResponse : BaseModel
     {
-        public string SopTitle { get; set; }
-        public DateTime ExpirationDate { get; set; }
-        public string SopDocument { get; set; }
+        public string? SopTitle { get; set; }
+        public DateTime? ExpirationDate { get; set; }
+        public string? SopDocument { get; set; }
         public int SopDocumentVersion { get; set; }
         public string? Remark { get; set; }
         public int ApprovalLevel { get; set; }
-        public SopApprovalStatus ApprovalStatus { get; set; }
+        public SopApprovalStatus? ApprovalStatus { get; set; }
         public string ApprovalStatusLabel => ApprovalStatus switch
         {
             SopApprovalStatus.Pending => "Pending",
             SopApprovalStatus.Approved => "Approved",
             SopApprovalStatus.Rejected => "Rejected",
+            SopApprovalStatus.Completed => "Completed",
+            SopApprovalStatus.Expired => "Expired",
+            null => "Unknown",
             _ => "Unknown"
         };
 
@@ -43,9 +46,9 @@ namespace TecLogos.SOP.WebModel.SOP
     public class SopApprovalHistoryResponse
     {
         public Guid SopDetailsID { get; set; }
-        public string SopTitle { get; set; }
-        public DateTime ExpirationDate { get; set; }
-        public string SopDocument { get; set; }
+        public string? SopTitle { get; set; }
+        public DateTime? ExpirationDate { get; set; }
+        public string? SopDocument { get; set; }
         public string Remark { get; set; }
 
         // From [SopDetailsApprovalHistory]
@@ -79,12 +82,12 @@ namespace TecLogos.SOP.WebModel.SOP
     public class SopTrackingStepResponse
     {
         public Guid ID { get; set; }
-        public string StageName { get; set; }
+        public string? StageName { get; set; }
         public int ApprovalLevel { get; set; }
         public bool IsSupervisor { get; set; }
 
         // Null = stage not yet reached
-        public SopApprovalStatus ApprovalStatus { get; set; }
+        public SopApprovalStatus? ApprovalStatus { get; set; }
         public string? Comments { get; set; }
         public DateTime? ActionedOn { get; set; }
         public string? ActionedByEmail { get; set; }
@@ -93,7 +96,10 @@ namespace TecLogos.SOP.WebModel.SOP
             SopApprovalStatus.Approved => "Approved",
             SopApprovalStatus.Rejected => "Rejected",
             SopApprovalStatus.Pending => "Pending",
-            _ => "Not Yet Reached"
+            SopApprovalStatus.Completed => "Completed",
+            SopApprovalStatus.Expired => "Expired",
+            null => "Not Yet Reached",
+            _ => "Unknown"
         };
     }
 
