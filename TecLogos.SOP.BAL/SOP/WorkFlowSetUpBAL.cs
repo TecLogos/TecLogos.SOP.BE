@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using TecLogos.SOP.DAL.SOP;
 using TecLogos.SOP.DataModel.SOP;
 using TecLogos.SOP.WebModel.SOP;
@@ -142,7 +142,10 @@ namespace TecLogos.SOP.BAL.SOP
                 StageName = s.StageName,
                 ApprovalLevel = s.ApprovalLevel,
                 IsSupervisor = s.IsSupervisor,
-                EmployeeGroupID = s.EmployeeGroupID
+                EmployeeGroupID = s.EmployeeGroupID,
+                GroupName = s.EmployeeGroupID.HasValue && groupMap.TryGetValue(s.EmployeeGroupID.Value, out var name)
+                    ? name
+                    : null
 
             };
     }

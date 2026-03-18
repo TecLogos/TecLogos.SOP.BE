@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using TecLogos.SOP.DAL.SOP;
 
 namespace TecLogos.SOP.BAL.SOP
@@ -26,8 +26,9 @@ namespace TecLogos.SOP.BAL.SOP
             new TecLogos.SOP.WebModel.SOP.EmployeeDDL
             {
                 ID = ddl.ID,
-              
-                Email = ddl.Email
+                Email = ddl.Email,
+                FirstName = ddl.FirstName,
+                LastName = ddl.LastName
             }).ToList();
         }
     }

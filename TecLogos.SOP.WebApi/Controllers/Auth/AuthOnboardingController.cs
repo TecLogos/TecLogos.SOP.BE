@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
@@ -19,7 +19,7 @@ namespace TecLogos.SOP.WebApi.Controllers.Auth
         }
 
         // HR ONLY 
-        [Authorize(Roles = "Admin,HRAdmin")]
+        [Authorize]
         [HttpPost("send-invite/{employeeId}")]
         public async Task<IActionResult> SendInvite(Guid employeeId)
         {

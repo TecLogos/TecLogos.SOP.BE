@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 
 namespace TecLogos.SOP.AuthBAL
@@ -7,7 +7,6 @@ namespace TecLogos.SOP.AuthBAL
     {
         Guid UserID { get; }
         string Email { get; }
-        string Role { get; }
     }
     public class UserContextBAL : IUserContextBAL
     {
@@ -35,12 +34,6 @@ namespace TecLogos.SOP.AuthBAL
             _httpContextAccessor.HttpContext?
                 .User?
                 .FindFirst(ClaimTypes.Email)?
-                .Value ?? string.Empty;
-
-        public string Role =>
-            _httpContextAccessor.HttpContext?
-                .User?
-                .FindFirst(ClaimTypes.Role)?
                 .Value ?? string.Empty;
     }
 }

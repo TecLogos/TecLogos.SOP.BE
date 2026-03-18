@@ -21,7 +21,7 @@ namespace TecLogos.SOP.WebApi.Controllers.SOP
     ///   PUT    /{id}         → update a stage
     ///   DELETE /{id}         → soft-delete a stage
     /// </summary>
-    [Authorize(Roles = "Admin")]
+    [Authorize]
     [ApiController]
     [Route("api/v1/[controller]")]
     public class WorkFlowSetUpController : CustomControllerBase

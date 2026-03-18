@@ -1,6 +1,8 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
 using System.Data;
 using TecLogos.SOP.DataModel.Auth;
 
@@ -9,7 +11,6 @@ namespace TecLogos.SOP.DAL.Auth
     public interface IAuthDAL
     {
         Task<AuthEmployeeEntity?> GetEmployeeByEmail(string Email);
-        Task<List<Role>> GetEmployeeRoles(Guid employeeId);
         Task UpdateLastLogin(Guid employeeId);
         Task IncrementFailedLoginAttempts(string Email);
         Task<RefreshToken?> GetRefreshToken(string token);
@@ -82,97 +83,6 @@ namespace TecLogos.SOP.DAL.Auth
                 LastFailedLoginAttemptOn = GetDate(reader, "LastFailedLoginAttemptOn"),
                 LastLoginDate = GetDate(reader, "LastLoginDate")
             };
-        }
-
-        public async Task<List<Role>> GetEmployeeRoles(Guid employeeId)
-        {
-            // ── Step 1: Try explicit EmployeeRole assignment (Admin has this) ─────────
-            const string explicitRoleSql = @"
-        SELECT r.ID AS RoleID, r.Name AS RoleName
-        FROM   [EmployeeRole] er WITH(NOLOCK)
-        INNER JOIN [Role] r WITH(NOLOCK) ON r.ID = er.RoleID
-        WHERE  er.EmployeeID = @EmployeeID
-          AND  er.IsDeleted  = 0
-          AND  er.IsActive   = 1
-          AND  r.IsDeleted   = 0
-          AND  r.IsActive    = 1;";
-
-            var roles = new List<Role>();
-
-            using var conn = await GetOpenConnectionAsync();
-            using var cmd1 = new SqlCommand(explicitRoleSql, conn);
-            cmd1.Parameters.Add("@EmployeeID", SqlDbType.UniqueIdentifier).Value = employeeId;
-
-            using var reader1 = await cmd1.ExecuteReaderAsync();
-            while (await reader1.ReadAsync())
-            {
-                roles.Add(new Role
-                {
-                    RoleID = (Guid)reader1["RoleID"],
-                    RoleName = reader1["RoleName"]?.ToString() ?? string.Empty
-                });
-            }
-            reader1.Close();
-
-            // If explicit role found (e.g. Admin), return immediately
-            if (roles.Count > 0)
-                return roles;
-
-            // ── Step 2: Derive role from EmployeeGroup membership ────────────────────
-            //
-            //  Join chain:
-            //    EmployeeGroupDetail (EGD) → EmployeeGroup (EG) → SopDetailsWorkFlowSetUp (WF)
-            //
-            //  Mapping logic (matches seed data + workflow setup):
-            //    WF.IsSupervisor = 1            → "Supervisor"
-            //    WF.ApprovalLevel = 1           → "Initiator"   (In Progress stage group)
-            //    WF.ApprovalLevel IN (3, 4, 5)  → "Approver"    (L1/L2/L3 approver groups)
-            //    WF.ApprovalLevel = 0           → "Admin"        (Admin group fallback)
-            //
-            const string derivedRoleSql = @"
-        SELECT DISTINCT
-            CASE
-                WHEN WF.IsSupervisor = 1        THEN 'Supervisor'
-                WHEN WF.ApprovalLevel = 1        THEN 'Initiator'
-                WHEN WF.ApprovalLevel IN (3,4,5) THEN 'Approver'
-                WHEN WF.ApprovalLevel = 0        THEN 'Admin'
-                ELSE                                  'Initiator'
-            END AS DerivedRole
-        FROM   [EmployeeGroupDetail] EGD WITH(NOLOCK)
-        INNER JOIN [EmployeeGroup]            EG  WITH(NOLOCK)
-               ON  EG.ID        = EGD.EmployeeGroupID
-              AND  EG.IsDeleted  = 0
-        INNER JOIN [SopDetailsWorkFlowSetUp]  WF  WITH(NOLOCK)
-               ON  WF.EmployeeGroupID = EG.ID
-              AND  WF.IsDeleted       = 0
-        WHERE  EGD.EmployeeID = @EmployeeID
-          AND  EGD.IsDeleted  = 0
-          AND  EGD.IsActive   = 1;";
-
-            using var cmd2 = new SqlCommand(derivedRoleSql, conn);
-            cmd2.Parameters.Add("@EmployeeID", SqlDbType.UniqueIdentifier).Value = employeeId;
-
-            using var reader2 = await cmd2.ExecuteReaderAsync();
-
-            // Take the first derived role (employees should be in one functional group)
-            if (await reader2.ReadAsync())
-            {
-                var derivedRoleName = reader2["DerivedRole"]?.ToString() ?? "Initiator";
-                roles.Add(new Role
-                {
-                    RoleID = Guid.Empty,         // no real Role row — derived from group
-                    RoleName = derivedRoleName
-                });
-            }
-            reader2.Close();
-
-            // Final fallback — should never happen, but prevents null role edge case
-            if (roles.Count == 0)
-            {
-                roles.Add(new Role { RoleID = Guid.Empty, RoleName = "Initiator" });
-            }
-
-            return roles;
         }
 
         // LOGIN TRACKING
@@ -369,9 +279,144 @@ AND ExpiresAt > GETUTCDATE()
             };
             reader.Close();
 
-            // Roles are populated by AuthBAL.GetUserProfile → _authDAL.GetEmployeeRoles
-            // (AuthBAL already calls GetEmployeeRoles and sets profile.Roles)
+            // Resolve access from EmployeeGroupDetail + workflow setup (group-based installs).
+            // This avoids depending on JWT Role claims, which are not always present.
+            var access = await GetAccessFlags(conn, employeeId);
+            profile.IsAdmin = access.IsAdmin;
+            profile.IsInitiator = access.IsInitiator;
+            profile.IsSupervisor = access.IsSupervisor;
+            profile.IsApprover = access.IsApprover;
+            profile.ResolvedRole = ResolveRole(access);
+
             return profile;
+        }
+
+        private static string ResolveRole((bool IsAdmin, bool IsInitiator, bool IsSupervisor, bool IsApprover) access)
+        {
+            if (access.IsAdmin) return "Admin";
+            if (access.IsApprover) return "Approver";
+            if (access.IsSupervisor) return "Supervisor";
+            if (access.IsInitiator) return "Initiator";
+            // Safe fallback
+            return "Initiator";
+        }
+
+        private async Task<(bool IsAdmin, bool IsInitiator, bool IsSupervisor, bool IsApprover)> GetAccessFlags(SqlConnection conn, Guid employeeId)
+        {
+            // Workflow levels:
+            // 0 = Not Started  (Admin group)
+            // 1 = In Progress  (Initiator group)
+            // 2 = Submitted    (Supervisor, manager-based)
+            // 3..5 Approvals   (Approver groups)
+            var adminGroupId = await GetWorkflowEmployeeGroupId(conn, approvalLevel: 0);
+            var initGroupId = await GetWorkflowEmployeeGroupId(conn, approvalLevel: 1);
+            var approverGroupIds = await GetWorkflowEmployeeGroupIds(conn, minApprovalLevelInclusive: 3);
+
+            var isAdmin = adminGroupId.HasValue && await IsInEmployeeGroup(conn, employeeId, adminGroupId.Value);
+            var isInitiator = initGroupId.HasValue && await IsInEmployeeGroup(conn, employeeId, initGroupId.Value);
+            var isApprover = approverGroupIds.Count > 0 && await IsInAnyEmployeeGroup(conn, employeeId, approverGroupIds);
+            var isSupervisor = await HasDirectReports(conn, employeeId);
+
+            return (isAdmin, isInitiator, isSupervisor, isApprover);
+        }
+
+        private static async Task<Guid?> GetWorkflowEmployeeGroupId(SqlConnection conn, int approvalLevel)
+        {
+            const string sql = @"
+SELECT TOP 1 EmployeeGroupID
+FROM SopDetailsWorkFlowSetUp WITH(NOLOCK)
+WHERE IsDeleted = 0
+  AND IsActive  = 1
+  AND IsSupervisor = 0
+  AND ApprovalLevel = @Level
+  AND EmployeeGroupID IS NOT NULL
+ORDER BY Created DESC;";
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Level", approvalLevel);
+            var result = await cmd.ExecuteScalarAsync();
+            if (result == null || result == DBNull.Value) return null;
+            return (Guid)result;
+        }
+
+        private static async Task<List<Guid>> GetWorkflowEmployeeGroupIds(SqlConnection conn, int minApprovalLevelInclusive)
+        {
+            const string sql = @"
+SELECT DISTINCT EmployeeGroupID
+FROM SopDetailsWorkFlowSetUp WITH(NOLOCK)
+WHERE IsDeleted = 0
+  AND IsActive  = 1
+  AND IsSupervisor = 0
+  AND ApprovalLevel >= @MinLevel
+  AND EmployeeGroupID IS NOT NULL;";
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@MinLevel", minApprovalLevelInclusive);
+            using var reader = await cmd.ExecuteReaderAsync();
+            var list = new List<Guid>();
+            while (await reader.ReadAsync())
+            {
+                if (reader[0] != DBNull.Value) list.Add((Guid)reader[0]);
+            }
+            reader.Close();
+            return list;
+        }
+
+        private static async Task<bool> IsInEmployeeGroup(SqlConnection conn, Guid employeeId, Guid employeeGroupId)
+        {
+            const string sql = @"
+SELECT TOP 1 1
+FROM EmployeeGroupDetail WITH(NOLOCK)
+WHERE IsDeleted = 0
+  AND IsActive  = 1
+  AND EmployeeID = @EmployeeID
+  AND EmployeeGroupID = @GroupID;";
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@EmployeeID", employeeId);
+            cmd.Parameters.AddWithValue("@GroupID", employeeGroupId);
+            var result = await cmd.ExecuteScalarAsync();
+            return result != null;
+        }
+
+        private static async Task<bool> IsInAnyEmployeeGroup(SqlConnection conn, Guid employeeId, List<Guid> groupIds)
+        {
+            if (groupIds.Count == 0) return false;
+
+            // Build an IN list safely with parameters
+            var paramNames = new List<string>();
+            using var cmd = new SqlCommand();
+            cmd.Connection = conn;
+            cmd.Parameters.AddWithValue("@EmployeeID", employeeId);
+
+            for (var i = 0; i < groupIds.Count; i++)
+            {
+                var p = "@G" + i;
+                paramNames.Add(p);
+                cmd.Parameters.AddWithValue(p, groupIds[i]);
+            }
+
+            cmd.CommandText = $@"
+SELECT TOP 1 1
+FROM EmployeeGroupDetail WITH(NOLOCK)
+WHERE IsDeleted = 0
+  AND IsActive  = 1
+  AND EmployeeID = @EmployeeID
+  AND EmployeeGroupID IN ({string.Join(",", paramNames)});";
+
+            var result = await cmd.ExecuteScalarAsync();
+            return result != null;
+        }
+
+        private static async Task<bool> HasDirectReports(SqlConnection conn, Guid managerId)
+        {
+            const string sql = @"
+SELECT TOP 1 1
+FROM Employee WITH(NOLOCK)
+WHERE IsDeleted = 0
+  AND IsActive  = 1
+  AND ManagerID = @ManagerID;";
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@ManagerID", managerId);
+            var result = await cmd.ExecuteScalarAsync();
+            return result != null;
         }
         #region Private Helpers
         private static string? GetString(SqlDataReader reader, string column)

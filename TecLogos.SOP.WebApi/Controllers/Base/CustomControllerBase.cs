@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
 namespace TecLogos.SOP.WebApi.Controllers.Base
@@ -15,8 +15,5 @@ namespace TecLogos.SOP.WebApi.Controllers.Base
             }
         }
 
-        /// <summary>Returns the authenticated user's role from the JWT Role claim.</summary>
-        protected string CurrentRole =>
-            User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
     }
 }

@@ -4,7 +4,6 @@ using TecLogos.SOP.WebModel.Base;
 
 namespace TecLogos.SOP.WebModel.SOP
 {
-    // ── POST: Create new SOP ──
     public class CreateSopRequest
     {
         public string? SopTitle { get; set; }
@@ -13,9 +12,17 @@ namespace TecLogos.SOP.WebModel.SOP
         public IFormFile? DocumentFile { get; set; }
     }
 
-    // ── PUT: Approve or Reject ──
+    public class UpdateSopRequest
+    {
+        public string? SopTitle { get; set; }
+        public DateTime? ExpirationDate { get; set; }
+        public string? Remark { get; set; }
+        public IFormFile? DocumentFile { get; set; }
+    }
+
     public class SopActionRequest
     {
+        public int NextApprovalLevel { get; set; }
         public string? Comments { get; set; }  // required on reject, optional on approve
     }
 
@@ -27,6 +34,7 @@ namespace TecLogos.SOP.WebModel.SOP
         public int SopDocumentVersion { get; set; }
         public string? Remark { get; set; }
         public int ApprovalLevel { get; set; }
+        public int NextApprovalLevel { get; set; }
         public SopApprovalStatus? ApprovalStatus { get; set; }
         public string ApprovalStatusLabel => ApprovalStatus switch
         {
@@ -35,12 +43,10 @@ namespace TecLogos.SOP.WebModel.SOP
             SopApprovalStatus.Rejected => "Rejected",
             SopApprovalStatus.Completed => "Completed",
             SopApprovalStatus.Expired => "Expired",
+            SopApprovalStatus.ReturnedForChanges => "Needs Changes",
             null => "Unknown",
             _ => "Unknown"
         };
-
-        // Joined from Employee — read-only context, not a DB column on SopDetails
-        public string? CreatedByEmail { get; set; }
     }
 
     public class SopApprovalHistoryResponse
@@ -64,21 +70,18 @@ namespace TecLogos.SOP.WebModel.SOP
         };
     }
 
-    // ── Response: paginated SOP list ──
     public class SopListResponse
     {
         public int TotalCount { get; set; }
         public List<SopDetailResponse> Items { get; set; } = new();
     }
 
-    // ── Response: paginated approver history list ──
     public class SopApprovalHistoryListResponse
     {
         public int TotalCount { get; set; }
         public List<SopApprovalHistoryResponse> Items { get; set; } = new();
     }
 
-    // ── Response: single tracking step ──
     public class SopTrackingStepResponse
     {
         public Guid ID { get; set; }
@@ -98,12 +101,12 @@ namespace TecLogos.SOP.WebModel.SOP
             SopApprovalStatus.Pending => "Pending",
             SopApprovalStatus.Completed => "Completed",
             SopApprovalStatus.Expired => "Expired",
+            SopApprovalStatus.ReturnedForChanges => "Needs Changes",
             null => "Not Yet Reached",
             _ => "Unknown"
         };
     }
 
-    // ── Response: full tracking wrapper ──
     public class SopTrackingResponse
     {
         public Guid SopId { get; set; }
@@ -116,10 +119,9 @@ namespace TecLogos.SOP.WebModel.SOP
         public string StageName { get; set; }
         public int ApprovalLevel { get; set; }   // 0–5
         public bool IsSupervisor { get; set; }
-        public Guid EmployeeGroupID { get; set; }   // NULL for supervisor stage
-        public string GroupName { get; set; }   // joined from EmployeeGroup.Name
+        public Guid? EmployeeGroupID { get; set; }   // NULL for supervisor stage
+        public string? GroupName { get; set; }   // joined from EmployeeGroup.Name
 
-        // Human-readable labels for the frontend
         public string ApprovalLevelLabel => ApprovalLevel switch
         {
             0 => "Not Started",
@@ -134,21 +136,19 @@ namespace TecLogos.SOP.WebModel.SOP
         public string TypeLabel => IsSupervisor ? "Supervisor" : "Approver";
     }
 
-    // ── Request: create a single stage ───────────────────────────────────────
     public class CreateWorkFlowStageRequest
     {
         public string StageName { get; set; }   // required
         public int ApprovalLevel { get; set; }   // 0–5
         public bool IsSupervisor { get; set; }
-        public Guid EmployeeGroupID { get; set; }   // required when IsSupervisor=false
+        public Guid? EmployeeGroupID { get; set; }   // required when IsSupervisor=false
     }
 
-    // ── Request: update an existing stage ────────────────────────────────────
     public class UpdateWorkFlowStageRequest
     {
         public string? StageName { get; set; }
         public int ApprovalLevel { get; set; }
         public bool IsSupervisor { get; set; }
-        public Guid EmployeeGroupID { get; set; }
+        public Guid? EmployeeGroupID { get; set; }
     }
 }

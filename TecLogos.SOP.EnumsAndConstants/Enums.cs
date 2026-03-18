@@ -7,7 +7,8 @@ namespace TecLogos.SOP.EnumsAndConstants
         Approved = 1,
         Rejected = 2,
         Completed = 3,
-        Expired = 4
+        Expired = 4,
+        ReturnedForChanges = 5
     }
 
 
@@ -32,8 +33,8 @@ namespace TecLogos.SOP.EnumsAndConstants
 
     public enum EmployeeGroupType
     {
-        Admin = 0,   // Creates SOPs — Not Started stage
-        Initiator = 1,   // Edits SOPs   — In Progress stage
+        Admin = 0,        // Creates SOPs — Not Started stage
+        Initiator = 1,    // Edits SOPs   — In Progress stage
         Supervisor = 2,   // Reviews SOPs — Submitted stage (manager-based, no group check)
         ApproverL1 = 3,   // Level 1 approval
         ApproverL2 = 4,   // Level 2 approval

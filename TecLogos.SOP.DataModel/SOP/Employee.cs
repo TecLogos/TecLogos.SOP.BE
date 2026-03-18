@@ -1,4 +1,4 @@
-﻿using TecLogos.SOP.DataModel.Base;
+using TecLogos.SOP.DataModel.Base;
 
 namespace TecLogos.SOP.DataModel.SOP
 {
@@ -9,10 +9,8 @@ namespace TecLogos.SOP.DataModel.SOP
         public string LastName { get; set; }
         public string Email { get; set; }
         public string MobileNumber { get; set; }
-      
+        public string? Address { get; set; }
         public Guid? ManagerID { get; set; }
-        public Guid? RoleID { get; set; }
-
     }
 
     public class EmployeeList : BaseModel
@@ -22,6 +20,7 @@ namespace TecLogos.SOP.DataModel.SOP
         public string LastName { get; set; }
         public string Email { get; set; }
         public string MobileNumber { get; set; }
+        public string? Address { get; set; }
     }
 
     public class EmployeeGroup : BaseModel  

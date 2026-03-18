@@ -1,4 +1,4 @@
-﻿using TecLogos.SOP.WebModel.Base;
+using TecLogos.SOP.WebModel.Base;
 
 namespace TecLogos.SOP.WebModel.SOP
 {
@@ -10,8 +10,8 @@ namespace TecLogos.SOP.WebModel.SOP
         public string LastName { get; set; }
         public string Email { get; set; }
         public string MobileNumber { get; set; }
+        public string? Address { get; set; }
         public Guid? ManagerID { get; set; }
-        public Guid? RoleID { get; set; }
 
     }
 

@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -78,8 +78,9 @@ namespace TecLogos.SOP.BAL.SOP
                 LastName = employee.LastName,
                 Email = employee.Email,
                 MobileNumber = employee.MobileNumber,
+                Address = employee.Address,
+                ManagerID = employee.ManagerID,
 
-                RoleID = employee.RoleID == Guid.Empty ? null : employee.RoleID,
                 IsActive = true,
                 IsDeleted = false,
                 Created = DateTime.Now,
@@ -117,8 +118,8 @@ namespace TecLogos.SOP.BAL.SOP
                 LastName = dto.LastName,
                 Email = dto.Email,
                 MobileNumber = dto.MobileNumber,
-
-                RoleID = dto.RoleID == Guid.Empty ? null : dto.RoleID,
+                Address = dto.Address,
+                ManagerID = dto.ManagerID,
                 Version = dto.Version,
                 IsActive = dto.IsActive,
                 ModifiedByID = modifiedByID
@@ -170,8 +171,10 @@ namespace TecLogos.SOP.BAL.SOP
                 LastName = employee.LastName,
                 Email = employee.Email,
                 MobileNumber = employee.MobileNumber,
+                Address = employee.Address,
+                ManagerID = employee.ManagerID,
 
-                RoleID = employee.RoleID,
+          
                 Version = employee.Version,
                 IsActive = employee.IsActive,
                 IsDeleted = employee.IsDeleted,

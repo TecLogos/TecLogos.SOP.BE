@@ -1,4 +1,4 @@
-﻿
+
 using TecLogos.SOP.DataModel.Base;
 
 namespace TecLogos.SOP.DataModel.Auth
@@ -12,7 +12,6 @@ namespace TecLogos.SOP.DataModel.Auth
         public DateTime? LastFailedLoginAttemptOn { get; set; }
         public DateTime? LastLoginDate { get; set; }
 
-        public List<Role> Roles { get; set; } = new();
     }
 
 }

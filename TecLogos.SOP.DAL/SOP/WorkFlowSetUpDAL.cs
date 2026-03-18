@@ -1,4 +1,4 @@
-﻿// Place in: TecLogos.SOP.DAL/SOP/WorkFlowSetUpDAL.cs
+// Place in: TecLogos.SOP.DAL/SOP/WorkFlowSetUpDAL.cs
 
 using System.Data;
 using Microsoft.Data.SqlClient;
@@ -180,7 +180,9 @@ namespace TecLogos.SOP.DAL.SOP
             StageName = r.IsDBNull(r.GetOrdinal("StageName")) ? null : r.GetString(r.GetOrdinal("StageName")),
             ApprovalLevel = r.GetInt32(r.GetOrdinal("ApprovalLevel")),
             IsSupervisor = r.GetBoolean(r.GetOrdinal("IsSupervisor")),
-            EmployeeGroupID = r.GetGuid(r.GetOrdinal("EmployeeGroupID")),
+            EmployeeGroupID = r.IsDBNull(r.GetOrdinal("EmployeeGroupID"))
+                ? null
+                : r.GetGuid(r.GetOrdinal("EmployeeGroupID")),
             Version = r.GetInt32(r.GetOrdinal("Version")),
             IsActive = r.GetBoolean(r.GetOrdinal("IsActive")),
             IsDeleted = r.GetBoolean(r.GetOrdinal("IsDeleted")),

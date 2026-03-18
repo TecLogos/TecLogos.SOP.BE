@@ -1,4 +1,4 @@
-﻿
+
 using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -32,7 +32,7 @@ namespace TecLogos.SOP.DAL.SOP
         public async Task<List<EmployeeDDL>> GetAll()
         {
 
-            const string  query = @"SELECT [ID], [Email] FROM [Employee] WITH(NOLOCK) WHERE [IsDeleted] = 0 ORDER BY [Email]";
+            const string query = @"SELECT [ID], [FirstName], [LastName], [Email] FROM [Employee] WITH(NOLOCK) WHERE [IsDeleted] = 0 ORDER BY [FirstName], [LastName]";
 
             var list = new List<EmployeeDDL>();
 
@@ -46,7 +46,9 @@ namespace TecLogos.SOP.DAL.SOP
                 list.Add(new EmployeeDDL
                 {
                     ID = GetGuid(reader, "ID"),
-                    Email = GetString(reader, "Email")
+                    Email = GetString(reader, "Email") ?? "",
+                    FirstName = GetString(reader, "FirstName"),
+                    LastName = GetString(reader, "LastName")
                 });
             }
 

@@ -1,8 +1,7 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
-using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -13,17 +12,11 @@ namespace TecLogos.SOP.BAL.Auth
 {
     public interface IAuthBAL
     {
-
         Task<AuthResponse> Login(Login login, string ipAddress);
-
         Task<AuthResponse> RefreshToken(string refreshToken, string ipAddress);
-
         Task<bool> RevokeToken(string token, string ipAddress);
-
         Task<bool> RevokeAllTokens(Guid employeeId, string ipAddress);
-
         Task<AuthEmployee?> GetUserProfile(Guid userId);
-
         string GenerateJwtToken(AuthEmployeeEntity employee);
     }
 
@@ -49,7 +42,7 @@ namespace TecLogos.SOP.BAL.Auth
             _authDAL = authDAL;
 
             _jwtSecretKey = configuration["Jwt:Key"]
-     ?? throw new InvalidOperationException("JWT Key missing");
+                ?? throw new InvalidOperationException("JWT Key missing");
             _jwtIssuer = configuration["Jwt:Issuer"]
                 ?? throw new InvalidOperationException("JWT Issuer missing");
             _jwtAudience = configuration["Jwt:Audience"]
@@ -75,8 +68,6 @@ namespace TecLogos.SOP.BAL.Auth
                 throw new UnauthorizedAccessException("Invalid credentials");
             }
 
-            employee.Roles = await _authDAL.GetEmployeeRoles(employee.ID);
-
             var jwtToken = GenerateJwtToken(employee);
             var refreshToken = GenerateRefreshToken();
 
@@ -100,7 +91,7 @@ namespace TecLogos.SOP.BAL.Auth
                 {
                     Id = employee.ID,
                     Email = employee.Email,
-                    Roles = employee.Roles.Select(r => r.RoleName).ToList()
+                    Roles = new List<string>()
                 }
             };
         }
@@ -117,13 +108,10 @@ namespace TecLogos.SOP.BAL.Auth
             var profile = await _authDAL.GetUserProfile(storedToken.EmployeeID)
                 ?? throw new UnauthorizedAccessException("Employee not found");
 
-            profile.Roles = await _authDAL.GetEmployeeRoles(profile.ID);
-
             var entity = new AuthEmployeeEntity
             {
                 ID = profile.ID,
-                Email = profile.Email,
-                Roles = profile.Roles
+                Email = profile.Email
             };
 
             var newJwt = GenerateJwtToken(entity);
@@ -147,7 +135,7 @@ namespace TecLogos.SOP.BAL.Auth
                 {
                     Id = profile.ID,
                     Email = profile.Email,
-                    Roles = profile.Roles.Select(r => r.RoleName).ToList()
+                    Roles = new List<string>()
                 }
             };
         }
@@ -168,6 +156,7 @@ namespace TecLogos.SOP.BAL.Auth
             await _authDAL.RevokeRefreshToken(storedToken.ID, ipAddress);
             return true;
         }
+
         public async Task<bool> RevokeAllTokens(Guid employeeId, string ipAddress)
         {
             var count = await _authDAL.RevokeAllTokensForEmployee(employeeId, ipAddress);
@@ -177,31 +166,20 @@ namespace TecLogos.SOP.BAL.Auth
         // ---------------- PROFILE ----------------
         public async Task<AuthEmployee?> GetUserProfile(Guid userId)
         {
-            var profile = await _authDAL.GetUserProfile(userId);
-            if (profile == null) return null;
-
-            profile.Roles = await _authDAL.GetEmployeeRoles(userId);
-
-            return profile;
+            return await _authDAL.GetUserProfile(userId);
         }
 
         // ---------------- HELPERS ----------------
-
         public string GenerateJwtToken(AuthEmployeeEntity employee)
         {
             var tokenHandler = new JwtSecurityTokenHandler();
             var key = Encoding.UTF8.GetBytes(_jwtSecretKey);
 
             var claims = new List<Claim>
-    {
-        new Claim(ClaimTypes.NameIdentifier, employee.ID.ToString()),
-        new Claim(ClaimTypes.Email, employee.Email)
-    };
-
-            foreach (var role in employee.Roles)
             {
-                claims.Add(new Claim(ClaimTypes.Role, role.RoleName));
-            }
+                new Claim(ClaimTypes.NameIdentifier, employee.ID.ToString()),
+                new Claim(ClaimTypes.Email, employee.Email)
+            };
 
             var credentials = new SigningCredentials(
                 new SymmetricSecurityKey(key),
@@ -225,5 +203,4 @@ namespace TecLogos.SOP.BAL.Auth
             return Convert.ToBase64String(bytes);
         }
     }
-
 }

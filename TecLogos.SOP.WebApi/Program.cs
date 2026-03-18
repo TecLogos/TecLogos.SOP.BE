@@ -8,7 +8,7 @@ using System.Security.Claims;
 using Microsoft.OpenApi.Models;
 using TecLogos.SOP.DataModel.Auth;
 using Microsoft.IdentityModel.Tokens;
-//using TecLogos.SOP.WebApi.Middleware;
+using TecLogos.SOP.WebApi.Middleware;
 using TecLogos.SOP.DAL.Auth;
 using TecLogos.SOP.DAL.SOP;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -186,14 +186,13 @@ namespace TecLogos.SOP.WebApi
             app.UseHttpsRedirection();
             app.UseCors("AllowClient");
             app.UseSerilogRequestLogging();
-            //app.UseMiddleware<GlobalExceptionMiddleware>();
+            app.UseMiddleware<GlobalExceptionMiddleware>();
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();
 
             // ── Serve Uploads folder as static files ──────────────────────────
-            // Allows direct URL access:
-            //   GET /Uploads/Sop-Detail/{sopId}/SopDocument/V1/filename.pdf
+
             var uploadsRoot = Path.Combine(builder.Environment.ContentRootPath, "Uploads");
             Directory.CreateDirectory(uploadsRoot);   // ensure folder exists on startup
             app.UseStaticFiles(new StaticFileOptions
@@ -224,15 +223,6 @@ namespace TecLogos.SOP.WebApi
             builder.Services.AddScoped<IEGDetailBAL, EGDetailBAL>();
             builder.Services.AddScoped<IEGDetailDAL, EGDetailDAL>();
 
-            //  Roles
-            builder.Services.AddScoped<IRolesBAL, RolesBAL>();
-            builder.Services.AddScoped<IRolesDAL, RolesDAL>();
-
-
-            //  Employee Roles
-            builder.Services.AddScoped<IEmployeeRoleBAL, EmployeeRoleBAL>();
-            builder.Services.AddScoped<IEmployeeRoleDAL, EmployeeRoleDAL>();
-
 
             //  EmployeeDDL
             builder.Services.AddScoped<IEmployeeDDLBAL, EmployeeDDLBAL>();
@@ -259,6 +249,10 @@ namespace TecLogos.SOP.WebApi
             // WorkFlowSetUp
             builder.Services.AddScoped<IWorkFlowSetUpDAL, WorkFlowSetUpDAL>();
             builder.Services.AddScoped<IWorkFlowSetUpBAL, WorkFlowSetUpBAL>();
+
+            // SopApproveReject
+            builder.Services.AddScoped<ISopApproveRejectDAL, SopApproveRejectDAL>();
+            builder.Services.AddScoped<ISopApproveRejectBAL, SopApproveRejectBAL>();
         }
     }
 }

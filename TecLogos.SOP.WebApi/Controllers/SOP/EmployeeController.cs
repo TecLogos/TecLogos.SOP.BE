@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TecLogos.SOP.AuthBAL;
 using TecLogos.SOP.BAL.SOP;
@@ -7,7 +7,7 @@ using TecLogos.SOP.WebModel.Base;
 
 namespace TecLogos.SOP.WebApi.Controllers.SOP
 {
-    [Authorize (Roles="Admin")]
+    [Authorize]
     [ApiController]
     [Route("api/v1/[controller]")]
     public class EmployeeController : CustomControllerBase
