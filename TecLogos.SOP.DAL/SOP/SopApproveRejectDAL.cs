@@ -31,7 +31,7 @@ namespace TecLogos.SOP.DAL.SOP
         {
             const string sql =
                 @"
-                    SELECT SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion, SD.Remark, SD.EmployeeID, WF.ApprovalLevel [NextApprovalLevel], SD.ApprovalLevel, WFL.StageName, ISNULL(WF.StageName, '') NextStageName, SD.ApprovalStatus, SD.Version
+                    SELECT SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion, SD.EmployeeID, WF.ApprovalLevel [NextApprovalLevel], SD.ApprovalLevel, WFL.StageName, ISNULL(WF.StageName, '') NextStageName, SD.ApprovalStatus, SD.Version
                   FROM [SopDetails] SD
                       INNER JOIN Employee EMP WITH(NOLOCK) ON EMP.ID = SD.EmployeeID AND EMP.IsDeleted = 0
                       INNER JOIN [SopDetailsWorkFlowSetUp] WF WITH(NOLOCK) ON  WF.ApprovalLevel = SD.ApprovalLevel + 1
@@ -40,12 +40,12 @@ namespace TecLogos.SOP.DAL.SOP
                       AND (WF.IsSupervisor = 1 AND EMP.ManagerID = @LoggedUserID)  --  Supervisors list
                   
                   UNION
-                  
-                  SELECT SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion, SD.Remark, SD.EmployeeID, WF.ApprovalLevel [NextApprovalLevel], SD.ApprovalLevel, WFL.StageName, ISNULL(WF.StageName, '') NextStageName, SD.ApprovalStatus, SD.Version
+
+                  SELECT SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion, SD.EmployeeID, WF.ApprovalLevel [NextApprovalLevel], SD.ApprovalLevel, WFL.StageName, ISNULL(WF.StageName, '') NextStageName, SD.ApprovalStatus, SD.Version
                   FROM [SopDetails] SD
                       INNER JOIN [SopDetailsWorkFlowSetUp] WF WITH(NOLOCK) ON  WF.ApprovalLevel = SD.ApprovalLevel + 1
-                      INNER JOIN EmployeeGroup EG ON EG.ID = WF.EmployeeGroupID
-                      INNER JOIN EmployeeGroupDetail EGD ON EGD.EmployeeGroupID = EG.ID AND EGD.EmployeeID = @LoggedUserID AND EGD.IsDeleted = 0 
+                      INNER JOIN EmployeeGroup EG WITH(NOLOCK) ON EG.ID = WF.EmployeeGroupID
+                      INNER JOIN EmployeeGroupDetail EGD WITH(NOLOCK) ON EGD.EmployeeGroupID = EG.ID AND EGD.EmployeeID = @LoggedUserID AND EGD.IsDeleted = 0 
                       LEFT JOIN SopDetailsWorkFlowSetUp WFL WITH(NOLOCK) ON SD.ApprovalLevel = WFL.ApprovalLevel AND WFL.IsDeleted = 0
                    WHERE SD.IsDeleted = 0 AND WF.IsDeleted = 0
                          AND (WF.IsSupervisor = 0 AND WF.EmployeeGroupID = EG.ID)  --  Approval group wise
@@ -168,9 +168,7 @@ namespace TecLogos.SOP.DAL.SOP
 
              SopDocumentVersion = r.GetInt32(r.GetOrdinal("SopDocumentVersion")),
 
-             Remark = r.IsDBNull(r.GetOrdinal("Remark"))
-                    ? null
-                    : r.GetString(r.GetOrdinal("Remark")),
+            
              ApprovalLevel = r.GetInt32(r.GetOrdinal("ApprovalLevel")),
              NextApprovalLevel = r.GetInt32(r.GetOrdinal("NextApprovalLevel")),
              StageName = r.GetString(r.GetOrdinal("StageName")),

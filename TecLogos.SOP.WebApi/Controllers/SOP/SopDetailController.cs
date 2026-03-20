@@ -13,12 +13,12 @@ namespace TecLogos.SOP.API.Controllers.SOP
     public class SopDetailController : CustomControllerBase
     {
         private readonly ISopDetailBAL _bal;
-        private readonly IFileStorageService _fileStorage;
+        private readonly IFileStorageBAL _fileStorage;
         private readonly ILogger<SopDetailController> _logger;
 
         public SopDetailController(
             ISopDetailBAL bal,
-            IFileStorageService fileStorage,
+            IFileStorageBAL fileStorage,
             ILogger<SopDetailController> logger)
         {
             _bal = bal;

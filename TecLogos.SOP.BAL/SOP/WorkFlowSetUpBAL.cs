@@ -18,7 +18,7 @@ namespace TecLogos.SOP.BAL.SOP
     public class WorkFlowSetUpBAL : IWorkFlowSetUpBAL
     {
         private readonly IWorkFlowSetUpDAL _dal;
-        private readonly IEmployeeGroupDAL _groupDal;   // to resolve GroupName
+        private readonly IEmployeeGroupDAL _groupDal;   
         private readonly ILogger<WorkFlowSetUpBAL> _logger;
 
         public WorkFlowSetUpBAL(

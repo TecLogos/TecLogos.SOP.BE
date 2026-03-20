@@ -52,32 +52,67 @@ namespace TecLogos.SOP.BAL.SOP
                 ExpirationDate = sop.ExpirationDate,
                 SopDocument = sop.SopDocument,
                 SopDocumentVersion = version,
-                Remark = sop.Remark,
+                CommentText = sop.CommentText,
                 ApprovalLevel = sop.ApprovalLevel,
                 NextApprovalLevel = sop.NextApprovalLevel,
                 ApprovalStatus = sop.ApprovalStatus,
-                SopApprovalHistoryResponseList = getSopApprovalHistory(sop),
 
+                SopApprovalHistoryResponseList = sop.SopApprovalHistoryList != null
+                    ? getSopApprovalHistory(sop)
+                    : new List<SopApprovalHistoryResponse>(),
+
+                      SopCommentsResponseList = sop.SopCommentsList != null
+                    ? getSopComments(sop)
+                    : new List<SopCommentsResponse>()
             };
         }
-
         private List<SopApprovalHistoryResponse> getSopApprovalHistory(SopDetail sop)
         {
             List<SopApprovalHistoryResponse> items = new();
+
+            if (sop.SopApprovalHistoryList == null)
+                return items;
+
             foreach (var item in sop.SopApprovalHistoryList)
             {
                 SopApprovalHistoryResponse wItem = new()
                 {
-                    StageName = item.StageName,
+                    StageName = item.StageName ?? "",     
                     ApprovalStatus = item.ApprovalStatus,
-                    Comments = item.Comments,
+                    Comments = item.Comments ?? "",       
                     Created = item.Created,
-                    CreatedBy = item.CreatedBy
+                    CreatedBy = item.CreatedBy ?? ""      
                 };
+
                 items.Add(wItem);
             }
+
             return items;
         }
+
+        private List<SopCommentsResponse> getSopComments(SopDetail sop)
+        {
+            List<SopCommentsResponse> items = new();
+
+            if (sop.SopCommentsList == null)
+                return items;
+
+            foreach (var item in sop.SopCommentsList)
+            {
+                SopCommentsResponse wItem = new()
+                {
+                    CommentText = item.CommentText ?? "",
+                    Created = item.Created,
+                    CreatedBy = item.CreatedBy ?? ""
+                };
+
+                items.Add(wItem);
+            }
+
+            return items;
+        }
+
+
 
         public async Task<Guid> CreateSop(CreateSopRequest request, Guid userId, Guid sopId, string? documentPath)
         {
@@ -93,7 +128,7 @@ namespace TecLogos.SOP.BAL.SOP
                 SopTitle = request.SopTitle.Trim(),
                 ExpirationDate = request.ExpirationDate,
                 SopDocument = documentPath,
-                Remark = request.Remark,
+                CommentText = request.CommentText,
                 ApprovalLevel = 0,
                 ApprovalStatus = SopApprovalStatus.Pending,
                 CreatedByID = userId,
@@ -102,8 +137,9 @@ namespace TecLogos.SOP.BAL.SOP
 
             _logger.LogInformation("BAL: Creating SOP [{Title}] by {UserId}", dm.SopTitle, userId);
 
-            return await _dal.CreateSop(dm);
+            return await _dal.CreateSop(dm, request.CommentText);
         }
+
         public async Task<bool> UpdateSop(Guid sopId, UpdateSopRequest request, Guid userId)
         {
             if (sopId == Guid.Empty)
@@ -162,7 +198,7 @@ namespace TecLogos.SOP.BAL.SOP
             return await _dal.UpdateSop(
                 sopId,
                 request.ExpirationDate,
-                request.Remark,
+                request.CommentText,
                 userId,
                 isFileUploaded,
                 filePath
@@ -184,7 +220,7 @@ namespace TecLogos.SOP.BAL.SOP
                ExpirationDate = d.ExpirationDate,
                SopDocument = d.SopDocument,
                SopDocumentVersion = d.SopDocumentVersion,
-               Remark = d.Remark,
+               CommentText = d.CommentText,
                ApprovalLevel = d.ApprovalLevel,
                NextApprovalLevel = d.NextApprovalLevel,
                ApprovalStatus = d.ApprovalStatus,
@@ -194,15 +230,5 @@ namespace TecLogos.SOP.BAL.SOP
                CreatedByID = d.CreatedByID,
 
            };
-
-        private static SopApprovalHistoryResponse SopHistoryToResponse(DataModel.SOP.SopApprovalHistory d)
-           => new()
-           {
-              ApprovalStatus = d.ApprovalStatus,
-              StageName = d.StageName,
-              Comments = d.Comments,
-              Created = d.Created,
-              CreatedBy = d.CreatedBy
-           };
-    }
+ }
 }

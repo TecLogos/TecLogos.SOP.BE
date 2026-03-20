@@ -36,7 +36,7 @@ namespace TecLogos.SOP.BAL.Auth
             _logger = logger;
         }
 
-        // 1️⃣ SEND INVITE EMAIL
+        // SEND INVITE EMAIL
         public async Task SendInvite(Guid employeeId, Guid createdBy)
         {
             var token = await _repo.CreateOnboardingInvite(employeeId, createdBy);
@@ -115,7 +115,7 @@ namespace TecLogos.SOP.BAL.Auth
             _logger.LogInformation("Onboarding invite sent to {Email}", email);
         }
 
-        // 2️⃣ VALIDATE TOKEN
+        // VALIDATE TOKEN
         public async Task<bool> ValidateInvite(string token)
         {
             var result = await _repo.ValidateInviteToken(token);
@@ -125,7 +125,7 @@ namespace TecLogos.SOP.BAL.Auth
             return true;
         }
 
-        // 3️⃣ SET PASSWORD
+        // SET PASSWORD
         public async Task SetPassword(string token, string password)
         {
             var result = await _repo.ValidateInviteToken(token);

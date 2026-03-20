@@ -243,7 +243,7 @@ namespace TecLogos.SOP.WebApi
             builder.Services.AddScoped<ISopDetailDAL, SopDetailDAL>();
 
             //  File Storage (SOP document upload)
-            builder.Services.AddScoped<IFileStorageService, FileStorageService>();
+            builder.Services.AddScoped<IFileStorageBAL, FileStorageBAL>();
 
             // WorkFlowSetUp
             builder.Services.AddScoped<IWorkFlowSetUpDAL, WorkFlowSetUpDAL>();

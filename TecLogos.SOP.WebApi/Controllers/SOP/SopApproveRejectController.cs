@@ -13,12 +13,12 @@ namespace TecLogos.SOP.API.Controllers.SOP
     public class SopApproveRejectController : CustomControllerBase
     {
         private readonly ISopApproveRejectBAL _bal;
-        private readonly IFileStorageService _fileStorage;
+        private readonly IFileStorageBAL _fileStorage;
         private readonly ILogger<SopApproveRejectController> _logger;
 
         public SopApproveRejectController(
             ISopApproveRejectBAL bal,
-            IFileStorageService fileStorage,
+            IFileStorageBAL fileStorage,
             ILogger<SopApproveRejectController> logger)
         {
             _bal = bal;

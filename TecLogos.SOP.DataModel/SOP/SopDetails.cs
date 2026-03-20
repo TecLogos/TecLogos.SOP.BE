@@ -9,7 +9,7 @@ namespace TecLogos.SOP.DataModel.SOP
         public DateTime ExpirationDate { get; set; }
         public string SopDocument { get; set; }
         public int SopDocumentVersion { get; set; } = 1;
-        public string Remark { get; set; }
+        public string CommentText { get; set; }
         public int ApprovalLevel { get; set; } = 0;
         public int NextApprovalLevel { get; set; }
         public string StageName { get; set; }
@@ -17,9 +17,16 @@ namespace TecLogos.SOP.DataModel.SOP
         public SopApprovalStatus? ApprovalStatus { get; set; }
 
         public List<SopApprovalHistory> SopApprovalHistoryList { get; set; } = [];
+        public List<SopComments> SopCommentsList { get; set; } = [];
 
     }
 
+    public class SopComments
+    {
+        public string CommentText { get; set; }
+        public DateTime Created { get; set; }
+        public string CreatedBy { get; set; }
+    }
     public class SopApprovalHistory
     {
         public int ApprovalStatus { get; set; }
@@ -28,6 +35,7 @@ namespace TecLogos.SOP.DataModel.SOP
         public DateTime Created { get; set; }
         public string CreatedBy { get; set; }
     }
+
     public class SopTrackingStep : BaseModel
     {
         public string? StageName { get; set; }

@@ -8,7 +8,7 @@ namespace TecLogos.SOP.WebModel.SOP
     {
         public string SopTitle { get; set; }
         public DateTime ExpirationDate { get; set; }
-        public string Remark { get; set; }
+        public string CommentText { get; set; }
         public IFormFile? DocumentFile { get; set; }
     }
 
@@ -16,7 +16,7 @@ namespace TecLogos.SOP.WebModel.SOP
     {
         public string? SopTitle { get; set; }
         public DateTime? ExpirationDate { get; set; }
-        public string? Remark { get; set; }
+        public string? CommentText { get; set; }
         public IFormFile? DocumentFile { get; set; }
     }
 
@@ -32,7 +32,7 @@ namespace TecLogos.SOP.WebModel.SOP
         public DateTime ExpirationDate { get; set; }
         public string SopDocument { get; set; }
         public int SopDocumentVersion { get; set; }
-        public string Remark { get; set; }
+        public string CommentText { get; set; }
         public int ApprovalLevel { get; set; }
         public int NextApprovalLevel { get; set; }
         public string StageName { get; set; }
@@ -51,6 +51,7 @@ namespace TecLogos.SOP.WebModel.SOP
         };
 
         public List<SopApprovalHistoryResponse> SopApprovalHistoryResponseList { get; set; }
+        public List<SopCommentsResponse> SopCommentsResponseList { get; set; }
     }
 
     public class SopApprovalHistoryResponse
@@ -58,6 +59,14 @@ namespace TecLogos.SOP.WebModel.SOP
         public int ApprovalStatus { get; set; }
         public string StageName { get; set; }
         public string Comments { get; set; }
+        public DateTime Created { get; set; }
+        public string CreatedBy { get; set; }
+    }
+
+    public class SopCommentsResponse
+    {
+         
+        public string CommentText { get; set; }
         public DateTime Created { get; set; }
         public string CreatedBy { get; set; }
     }

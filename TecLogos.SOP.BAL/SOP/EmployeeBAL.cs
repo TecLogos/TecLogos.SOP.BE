@@ -92,7 +92,7 @@ namespace TecLogos.SOP.BAL.SOP
             // Save employee
             var employeeId = await _employeeDAL.Create(employeeDM);
 
-            // Auto send onboarding invite 🔥
+            // Auto send onboarding invite
             await _onboarding.SendInvite(employeeId, createdByID);
 
             // Return new employee ID

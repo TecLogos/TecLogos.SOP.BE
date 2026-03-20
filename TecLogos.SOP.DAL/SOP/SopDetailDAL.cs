@@ -15,7 +15,7 @@ namespace TecLogos.SOP.DAL.SOP
 
         Task<(SopDetail? sop, int documentVersion)> GetSopById(Guid sopId);
 
-        Task<Guid> CreateSop(SopDetail sop);
+        Task<Guid> CreateSop(SopDetail sop, string? commentText);
         Task<bool> UpdateSop(Guid sopId, DateTime? expirationDate, string? remark, Guid modifiedById, bool isFileUploaded, string? filePath);
         Task<bool> Delete(Guid sopId, Guid deletedById);
    
@@ -43,7 +43,6 @@ namespace TecLogos.SOP.DAL.SOP
                     SD.ExpirationDate,
                     SD.SopDocument,
                     SD.SopDocumentVersion,
-                    SD.Remark,
                     SD.ApprovalLevel,
                     WF.StageName,
                     ISNULL(WFN.StageName, '') NextStageName,
@@ -93,33 +92,38 @@ namespace TecLogos.SOP.DAL.SOP
         }
         public async Task<(SopDetail? sop, int documentVersion)> GetSopById(Guid sopId)
         {
-            const string sql = @"
-
- SELECT
-                                  SD.ID,
-                                  SD.SopTitle,
-                                  SD.ExpirationDate,
-                                  SD.SopDocument,
-                                  SD.SopDocumentVersion,
-                                  SD.Remark,
-                                  SD.ApprovalLevel,
-                                  SD.ApprovalStatus,
-                                  SD.Version,
-                                  SD.IsActive,
-                                  SD.IsDeleted,
-                                  SD.Created,
-                                  SD.CreatedByID
-                              FROM [SopDetails] SD
-                              WHERE SD.ID = @SopID
-                                AND SD.IsDeleted = 0
+            const string sql =
+                @"
+                SELECT
+                    SD.ID,
+                    SD.SopTitle,
+                    SD.ExpirationDate,
+                    SD.SopDocument,
+                    SD.SopDocumentVersion,
+                    SD.ApprovalLevel,
+                    SD.ApprovalStatus,
+                    SD.Version,
+                    SD.IsActive,
+                    SD.IsDeleted,
+                    SD.Created,
+                    SD.CreatedByID
+                FROM [SopDetails] SD
+                WHERE SD.ID = @SopID
+                  AND SD.IsDeleted = 0
                               
-SELECT SDAH.ID, SDAH.ApprovalStatus, WF.StageName, SDAH.Comments, SDAH.Created, EMP.FirstName + ' ' + EMP.LastName [CreatedBy]
-FROM SopDetailsApprovalHistory SDAH WITH(NOLOCK)
-	INNER JOIN Employee EMP WITH(NOLOCK) ON EMP.ID = SDAH.CreatedByID
-	INNER JOIN SopDetailsWorkFlowSetUp WF WITH(NOLOCK) ON WF.ApprovalLevel = SDAH.ApprovalLevel
-WHERE SDAH.SopDetailsID = @SopID
-ORDER BY SDAH.Created
-                                ";
+                SELECT SDAH.ID, SDAH.ApprovalStatus, WF.StageName, SDAH.Comments, SDAH.Created, EMP.FirstName + ' ' + EMP.LastName [CreatedBy]
+                FROM [SopDetailsApprovalHistory] SDAH WITH(NOLOCK)
+                	INNER JOIN Employee EMP WITH(NOLOCK) ON EMP.ID = SDAH.CreatedByID
+                	INNER JOIN SopDetailsWorkFlowSetUp WF WITH(NOLOCK) ON WF.ApprovalLevel = SDAH.ApprovalLevel
+                WHERE SDAH.SopDetailsID = @SopID
+                ORDER BY SDAH.Created
+
+                SELECT CM.ID, CM.CommentText, CM.Created, EMP.FirstName + ' ' + EMP.LastName [CreatedBy]
+                FROM [Comment] CM WITH(NOLOCK)
+                    INNER JOIN Employee EMP WITH(NOLOCK) ON EMP.ID = CM.CreatedByID
+                WHERE ReferenceID = @SopID
+                ORDER BY CM.Created
+                ";
 
             using var conn = CreateConnection();
             await conn.OpenAsync();
@@ -149,68 +153,102 @@ ORDER BY SDAH.Created
                 sop.SopApprovalHistoryList.Add(MapApprovalHistory(reader));
             }
 
+            
+            await reader.NextResultAsync();
+            sop.SopCommentsList = [];
+            while (await reader.ReadAsync())
+            {
+                sop.SopCommentsList.Add(MapComments(reader));
+            }
 
             return (sop, docVersion);
-        } 
-        public async Task<Guid> CreateSop(SopDetail sop)
+        }
+
+        public async Task<Guid> CreateSop(SopDetail sop, string? commentText)
         {
             const string sql = @"
                 INSERT INTO [SopDetails]
-                    (ID, SopTitle, ExpirationDate, SopDocument, SopDocumentVersion,
-                     Remark, ApprovalLevel, ApprovalStatus, EmployeeID, CreatedByID, Created)
+                (ID, SopTitle, ExpirationDate, SopDocument, SopDocumentVersion,
+                 ApprovalLevel, ApprovalStatus, EmployeeID, CreatedByID, Created)
                 VALUES
-                    (@ID, @SopTitle, @ExpirationDate, @SopDocument, 1,
-                     @Remark, 0, 0, @EmployeeID, @CreatedByID, GETDATE());
-
+                (@ID, @SopTitle, @ExpirationDate, @SopDocument, 1,
+                 0, 0, @EmployeeID, @CreatedByID, GETDATE());
+               
                 INSERT INTO [SopDetailsHistory]
-                    (SopDetailsID, SopTitle, ExpirationDate, SopDocument,
-                     SopDocumentVersion, Remark, ApprovalLevel, ApprovalStatus,
-                     EmployeeID, CreatedByID, Created)
+                (SopDetailsID, SopTitle, ExpirationDate, SopDocument,
+                 SopDocumentVersion, ApprovalLevel, ApprovalStatus,
+                 EmployeeID, CreatedByID, Created)
                 VALUES
-                    (@ID, @SopTitle, @ExpirationDate, @SopDocument,
-                     1, @Remark, 0, 0, @EmployeeID, @CreatedByID, GETDATE());";
+                (@ID, @SopTitle, @ExpirationDate, @SopDocument,
+                 1, 0, 0, @EmployeeID, @CreatedByID, GETDATE());
+               
+                INSERT INTO [Comment]
+                (ID, ReferenceID, CommentText, CreatedByID, Created)
+                VALUES
+                (NEWID(), @ID, @CommentText, @CreatedByID, GETDATE());
+                ";
 
             using var conn = CreateConnection();
             await conn.OpenAsync();
 
             using var cmd = new SqlCommand(sql, conn);
+
             cmd.Parameters.Add("@ID", SqlDbType.UniqueIdentifier).Value = sop.ID;
             cmd.Parameters.Add("@SopTitle", SqlDbType.NVarChar).Value = (object?)sop.SopTitle ?? DBNull.Value;
             cmd.Parameters.Add("@ExpirationDate", SqlDbType.DateTime2).Value = (object?)sop.ExpirationDate ?? DBNull.Value;
             cmd.Parameters.Add("@SopDocument", SqlDbType.NVarChar).Value = (object?)sop.SopDocument ?? DBNull.Value;
-            cmd.Parameters.Add("@Remark", SqlDbType.NVarChar).Value = (object?)sop.Remark ?? DBNull.Value;
             cmd.Parameters.Add("@EmployeeID", SqlDbType.UniqueIdentifier).Value = sop.CreatedByID;
             cmd.Parameters.Add("@CreatedByID", SqlDbType.UniqueIdentifier).Value = sop.CreatedByID;
+            cmd.Parameters.Add("@CommentText", SqlDbType.NVarChar).Value = (object?)commentText ?? DBNull.Value;
 
             await cmd.ExecuteNonQueryAsync();
-            _logger.LogInformation("SOP created. ID={SopId} By={EmpId}", sop.ID, sop.CreatedByID);
             return sop.ID;
         }
 
         public async Task<bool> UpdateSop(Guid sopId, DateTime? expirationDate, string? remark, Guid modifiedById, bool isFileUploaded, string? filePath)
         {
-            const string sql =
+            const string sql = 
                 @"
-               UPDATE [SopDetails]
-               SET    ExpirationDate = @ExpirationDate,
-               Remark         = @Remark,
-               Modified       = GETDATE(),
-               ModifiedByID   = @ModifiedByID,
-               Version        = Version + 1,
+                 UPDATE [SopDetails]
+                 SET    ExpirationDate = @ExpirationDate,
+                        Modified       = GETDATE(),
+                        ModifiedByID   = @ModifiedByID,
+                        Version        = Version + 1,
+                 
+                        SopDocumentVersion =
+                             CASE 
+                                 WHEN @IsFileUploaded = 1 THEN SopDocumentVersion + 1
+                                 ELSE SopDocumentVersion
+                             END,
+                 
+                        SopDocument =
+                             CASE 
+                                 WHEN @IsFileUploaded = 1 THEN @FilePath
+                                 ELSE SopDocument
+                             END
+                 WHERE ID = @SopID;
+                 
+                 INSERT INTO [SopDetailsHistory]
+                 (
+                     SopDetailsID, SopTitle, ExpirationDate, SopDocument, SopDocumentVersion,
+                     ApprovalLevel, ApprovalStatus, EmployeeID, CreatedByID, Created
+                 )
+                 SELECT 
+                     SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion,
+                     SD.ApprovalLevel, SD.ApprovalStatus, SD.EmployeeID, @ModifiedByID, GETDATE()
+                 FROM SopDetails SD
+                 WHERE SD.ID = @SopID;
 
-               SopDocumentVersion =
-                    CASE 
-                        WHEN @IsFileUploaded = 1 THEN SopDocumentVersion + 1
-                        ELSE SopDocumentVersion
-                    END,
+                 INSERT INTO[Comment]
+                 (
+                     ID, ReferenceID, CommentText, CreatedByID, Created
+                 )
+                 VALUES
+                 (
+                     NEWID(), @SopID, @CommentText, @ModifiedByID, GETDATE()
+                 );
 
-               SopDocument =
-                    CASE 
-                        WHEN @IsFileUploaded = 1 THEN @FilePath
-                        ELSE SopDocument
-                    END
-
-                 WHERE ID = @SopID;";
+                 ";
 
             using var conn = CreateConnection();
             await conn.OpenAsync();
@@ -219,14 +257,23 @@ ORDER BY SDAH.Created
 
             cmd.Parameters.AddWithValue("@SopID", sopId);
             cmd.Parameters.AddWithValue("@ExpirationDate", (object?)expirationDate ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("@Remark", (object?)remark ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("@CommentText", (object?)remark ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@ModifiedByID", modifiedById);
             cmd.Parameters.AddWithValue("@IsFileUploaded", isFileUploaded);
             cmd.Parameters.AddWithValue("@FilePath", (object?)filePath ?? DBNull.Value);
 
             var rows = await cmd.ExecuteNonQueryAsync();
+
+            if (rows > 0)
+            {
+                _logger.LogInformation("SOP updated with history. ID={SopId} By={User}", sopId, modifiedById);
+            }
+
             return rows > 0;
         }
+
+       
+        
         public async Task<bool> Delete(Guid sopId, Guid deletedById)
         {
             const string sql = @"
@@ -269,10 +316,6 @@ ORDER BY SDAH.Created
 
                 SopDocumentVersion = r.GetInt32(r.GetOrdinal("SopDocumentVersion")),
 
-                Remark = r.IsDBNull(r.GetOrdinal("Remark"))
-                    ? null
-                    : r.GetString(r.GetOrdinal("Remark")),
-
                 ApprovalLevel = r.GetInt32(r.GetOrdinal("ApprovalLevel")),
                 
 
@@ -291,10 +334,36 @@ ORDER BY SDAH.Created
             return new SopApprovalHistory
             {
                 ApprovalStatus = r.GetInt32(r.GetOrdinal("ApprovalStatus")),
-                StageName = r.GetString(r.GetOrdinal("StageName")),
-                Comments = r.GetString(r.GetOrdinal("Comments")),
+
+                StageName = r.IsDBNull(r.GetOrdinal("StageName"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("StageName")),
+
+                Comments = r.IsDBNull(r.GetOrdinal("Comments"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("Comments")),
+
                 Created = r.GetDateTime(r.GetOrdinal("Created")),
-                CreatedBy = r.GetString(r.GetOrdinal("CreatedBy")),
+
+                CreatedBy = r.IsDBNull(r.GetOrdinal("CreatedBy"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("CreatedBy")),
+            };
+        }
+
+        private static SopComments MapComments(SqlDataReader r)
+        {
+            return new SopComments
+            {
+                CommentText = r.IsDBNull(r.GetOrdinal("CommentText"))
+                   ? null
+                   : r.GetString(r.GetOrdinal("CommentText")),
+
+                Created = r.GetDateTime(r.GetOrdinal("Created")),
+
+                CreatedBy = r.IsDBNull(r.GetOrdinal("CreatedBy"))
+                   ? null
+                   : r.GetString(r.GetOrdinal("CreatedBy")),
             };
         }
 

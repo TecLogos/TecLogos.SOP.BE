@@ -56,7 +56,7 @@ namespace TecLogos.SOP.BAL.SOP
         public Task<bool> Delete(Guid id, Guid userId)
             => _dal.Delete(id, userId);
 
-        // 🔁 Mapping Methods (VERY IMPORTANT)
+        // Mapping Methods
 
         private static EGDetail MapToWebModel(DataModel.SOP.EGDetail d) => new()
         {

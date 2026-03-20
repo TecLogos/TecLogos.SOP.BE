@@ -66,7 +66,7 @@ namespace TecLogos.SOP.BAL.SOP
          ExpirationDate = d.ExpirationDate,
          SopDocument = d.SopDocument,
          SopDocumentVersion = d.SopDocumentVersion,
-         Remark = d.Remark,
+            CommentText = d.CommentText,
          ApprovalLevel = d.ApprovalLevel,
          NextApprovalLevel = d.NextApprovalLevel,
             StageName = d.StageName,
