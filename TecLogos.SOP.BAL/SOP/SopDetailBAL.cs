@@ -52,7 +52,7 @@ namespace TecLogos.SOP.BAL.SOP
                 ExpirationDate = sop.ExpirationDate,
                 SopDocument = sop.SopDocument,
                 SopDocumentVersion = version,
-                CommentText = sop.CommentText,
+                //CommentText = sop.CommentText,
                 ApprovalLevel = sop.ApprovalLevel,
                 NextApprovalLevel = sop.NextApprovalLevel,
                 ApprovalStatus = sop.ApprovalStatus,
@@ -61,9 +61,9 @@ namespace TecLogos.SOP.BAL.SOP
                     ? getSopApprovalHistory(sop)
                     : new List<SopApprovalHistoryResponse>(),
 
-                      SopCommentsResponseList = sop.SopCommentsList != null
-                    ? getSopComments(sop)
-                    : new List<SopCommentsResponse>()
+                      SopDetailHistoryResponseList = sop.SopDetailHistoryList != null
+                    ? getSopDetailHistory(sop)
+                    : new List<SopDetailHistoryResponse>()
             };
         }
         private List<SopApprovalHistoryResponse> getSopApprovalHistory(SopDetail sop)
@@ -81,6 +81,7 @@ namespace TecLogos.SOP.BAL.SOP
                     ApprovalStatus = item.ApprovalStatus,
                     Comments = item.Comments ?? "",       
                     Created = item.Created,
+                    Version = item.Version,
                     CreatedBy = item.CreatedBy ?? ""      
                 };
 
@@ -90,19 +91,22 @@ namespace TecLogos.SOP.BAL.SOP
             return items;
         }
 
-        private List<SopCommentsResponse> getSopComments(SopDetail sop)
+        private List<SopDetailHistoryResponse> getSopDetailHistory(SopDetail sop)
         {
-            List<SopCommentsResponse> items = new();
+            List<SopDetailHistoryResponse> items = new();
 
-            if (sop.SopCommentsList == null)
+            if (sop.SopDetailHistoryList == null)
                 return items;
 
-            foreach (var item in sop.SopCommentsList)
+            foreach (var item in sop.SopDetailHistoryList)
             {
-                SopCommentsResponse wItem = new()
+                SopDetailHistoryResponse wItem = new()
                 {
+                    SopTitle = item.SopTitle ?? "",
+                    SopDocument = item.SopDocument ?? "",
                     CommentText = item.CommentText ?? "",
                     Created = item.Created,
+                    Version = item.Version,
                     CreatedBy = item.CreatedBy ?? ""
                 };
 
@@ -111,8 +115,6 @@ namespace TecLogos.SOP.BAL.SOP
 
             return items;
         }
-
-
 
         public async Task<Guid> CreateSop(CreateSopRequest request, Guid userId, Guid sopId, string? documentPath)
         {
@@ -128,7 +130,7 @@ namespace TecLogos.SOP.BAL.SOP
                 SopTitle = request.SopTitle.Trim(),
                 ExpirationDate = request.ExpirationDate,
                 SopDocument = documentPath,
-                CommentText = request.CommentText,
+                //CommentText = request.CommentText,
                 ApprovalLevel = 0,
                 ApprovalStatus = SopApprovalStatus.Pending,
                 CreatedByID = userId,
@@ -177,7 +179,8 @@ namespace TecLogos.SOP.BAL.SOP
                 if (!Directory.Exists(basePath))
                     Directory.CreateDirectory(basePath);
 
-                string fileName = Path.GetFileName(request.DocumentFile.FileName);
+                string originalName = Path.GetFileName(request.DocumentFile.FileName);
+                string fileName = $"V{newVersion}-{originalName}";
                 string fullPath = Path.Combine(basePath, fileName);
 
                 using (var stream = new FileStream(fullPath, FileMode.Create))
@@ -220,7 +223,7 @@ namespace TecLogos.SOP.BAL.SOP
                ExpirationDate = d.ExpirationDate,
                SopDocument = d.SopDocument,
                SopDocumentVersion = d.SopDocumentVersion,
-               CommentText = d.CommentText,
+               //CommentText = d.CommentText,
                ApprovalLevel = d.ApprovalLevel,
                NextApprovalLevel = d.NextApprovalLevel,
                ApprovalStatus = d.ApprovalStatus,

@@ -51,7 +51,7 @@ namespace TecLogos.SOP.WebModel.SOP
         };
 
         public List<SopApprovalHistoryResponse> SopApprovalHistoryResponseList { get; set; }
-        public List<SopCommentsResponse> SopCommentsResponseList { get; set; }
+        public List<SopDetailHistoryResponse> SopDetailHistoryResponseList { get; set; }
     }
 
     public class SopApprovalHistoryResponse
@@ -59,15 +59,18 @@ namespace TecLogos.SOP.WebModel.SOP
         public int ApprovalStatus { get; set; }
         public string StageName { get; set; }
         public string Comments { get; set; }
+        public int Version { get; set; }
         public DateTime Created { get; set; }
         public string CreatedBy { get; set; }
     }
 
-    public class SopCommentsResponse
+    public class SopDetailHistoryResponse
     {
-         
+        public string SopTitle { get; set; }
+        public string SopDocument { get; set; }
         public string CommentText { get; set; }
         public DateTime Created { get; set; }
+        public int Version { get; set; }
         public string CreatedBy { get; set; }
     }
 

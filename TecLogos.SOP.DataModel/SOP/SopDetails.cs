@@ -17,13 +17,16 @@ namespace TecLogos.SOP.DataModel.SOP
         public SopApprovalStatus? ApprovalStatus { get; set; }
 
         public List<SopApprovalHistory> SopApprovalHistoryList { get; set; } = [];
-        public List<SopComments> SopCommentsList { get; set; } = [];
+        public List<SopDetailHistory> SopDetailHistoryList { get; set; } = [];
 
     }
 
-    public class SopComments
+    public class SopDetailHistory
     {
+        public string SopTitle { get; set; }
+        public string SopDocument { get; set; }
         public string CommentText { get; set; }
+        public int Version { get; set; }
         public DateTime Created { get; set; }
         public string CreatedBy { get; set; }
     }
@@ -32,6 +35,7 @@ namespace TecLogos.SOP.DataModel.SOP
         public int ApprovalStatus { get; set; }
         public string StageName { get; set; }
         public string Comments { get; set; }
+        public int Version { get; set; }
         public DateTime Created { get; set; }
         public string CreatedBy { get; set; }
     }

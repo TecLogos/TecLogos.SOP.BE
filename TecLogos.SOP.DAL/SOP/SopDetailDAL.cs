@@ -48,17 +48,19 @@ namespace TecLogos.SOP.DAL.SOP
                     ISNULL(WFN.StageName, '') NextStageName,
                     SD.ApprovalStatus,
                     SD.Version,
+                   -- C.CommentText,
                     SD.IsActive,
                     SD.IsDeleted,
                     SD.Created,
                     SD.CreatedByID
                 FROM  [SopDetails] SD WITH(NOLOCK)
+                  --  LEFT JOIN Comment C WITH(NOLOCK) ON C.ReferenceID = SD.ID AND C.Version = SD.Version
                     LEFT JOIN SopDetailsWorkFlowSetUp WF WITH(NOLOCK) ON SD.ApprovalLevel = WF.ApprovalLevel AND WF.IsDeleted = 0
                     LEFT JOIN SopDetailsWorkFlowSetUp WFN WITH(NOLOCK) ON SD.ApprovalLevel + 1 = WFN.ApprovalLevel AND WFN.IsDeleted = 0
                 WHERE SD.IsDeleted = 0
                   AND (@ApprovalStatus IS NULL OR SD.ApprovalStatus = @ApprovalStatus)
                   AND (@Year         IS NULL OR YEAR(SD.Created)   = @Year)
-                ORDER BY SD.Created
+                ORDER BY SD.Created;
                 
                 IF EXISTS (SELECT 1 FROM SopDetails WITH(NOLOCK) WHERE CONVERT(DATE, ExpirationDate) < CONVERT(DATE, GETDATE()))
                 BEGIN
@@ -102,27 +104,30 @@ namespace TecLogos.SOP.DAL.SOP
                     SD.SopDocumentVersion,
                     SD.ApprovalLevel,
                     SD.ApprovalStatus,
+                    C.CommentText,
                     SD.Version,
                     SD.IsActive,
                     SD.IsDeleted,
                     SD.Created,
                     SD.CreatedByID
                 FROM [SopDetails] SD
+                    LEFT JOIN Comment C ON C.ReferenceID = SD.ID AND C.Version = SD.Version
                 WHERE SD.ID = @SopID
                   AND SD.IsDeleted = 0
                               
-                SELECT SDAH.ID, SDAH.ApprovalStatus, WF.StageName, SDAH.Comments, SDAH.Created, EMP.FirstName + ' ' + EMP.LastName [CreatedBy]
+                SELECT SDAH.ID, SDAH.ApprovalStatus, WF.StageName, SDAH.Comments, SDAH.[ReferenceVersion] Version, SDAH.Created, EMP.FirstName + ' ' + EMP.LastName [CreatedBy]
                 FROM [SopDetailsApprovalHistory] SDAH WITH(NOLOCK)
                 	INNER JOIN Employee EMP WITH(NOLOCK) ON EMP.ID = SDAH.CreatedByID
                 	INNER JOIN SopDetailsWorkFlowSetUp WF WITH(NOLOCK) ON WF.ApprovalLevel = SDAH.ApprovalLevel
                 WHERE SDAH.SopDetailsID = @SopID
-                ORDER BY SDAH.Created
+                ORDER BY SDAH.Created, SDAH.ApprovalLevel
 
-                SELECT CM.ID, CM.CommentText, CM.Created, EMP.FirstName + ' ' + EMP.LastName [CreatedBy]
-                FROM [Comment] CM WITH(NOLOCK)
-                    INNER JOIN Employee EMP WITH(NOLOCK) ON EMP.ID = CM.CreatedByID
-                WHERE ReferenceID = @SopID
-                ORDER BY CM.Created
+                 SELECT SH.SopTitle, SH.SopDocument, ISNULL(C.CommentText,'') CommentText, SH.Version, EMP.FirstName + ' ' + EMP.LastName [CreatedBy], SH.Created
+                 FROM [SopDetailsHistory] SH WITH(NOLOCK) 
+	                LEFT JOIN Comment C WITH(NOLOCK) ON C.ReferenceID = SH.SopDetailsID AND C.Version = SH.Version
+	                INNER JOIN Employee EMP WITH(NOLOCK) ON EMP.ID = SH.CreatedByID
+                 WHERE SH.SopDetailsID = @SopID
+                 ORDER BY SH.Created, SH.Version
                 ";
 
             using var conn = CreateConnection();
@@ -155,10 +160,10 @@ namespace TecLogos.SOP.DAL.SOP
 
             
             await reader.NextResultAsync();
-            sop.SopCommentsList = [];
+            sop.SopDetailHistoryList = [];
             while (await reader.ReadAsync())
             {
-                sop.SopCommentsList.Add(MapComments(reader));
+                sop.SopDetailHistoryList.Add(MapSopDetailHistory(reader));
             }
 
             return (sop, docVersion);
@@ -182,10 +187,14 @@ namespace TecLogos.SOP.DAL.SOP
                 (@ID, @SopTitle, @ExpirationDate, @SopDocument,
                  1, 0, 0, @EmployeeID, @CreatedByID, GETDATE());
                
-                INSERT INTO [Comment]
-                (ID, ReferenceID, CommentText, CreatedByID, Created)
-                VALUES
-                (NEWID(), @ID, @CommentText, @CreatedByID, GETDATE());
+               INSERT INTO [Comment]
+               (
+                   ID, ReferenceID, CommentText, Version, CreatedByID, Created
+               )
+               VALUES
+               (
+                   NEWID(), @ID, @CommentText, 1, @CreatedByID, GETDATE()
+               )
                 ";
 
             using var conn = CreateConnection();
@@ -207,7 +216,7 @@ namespace TecLogos.SOP.DAL.SOP
 
         public async Task<bool> UpdateSop(Guid sopId, DateTime? expirationDate, string? remark, Guid modifiedById, bool isFileUploaded, string? filePath)
         {
-            const string sql = 
+            const string sql =
                 @"
                  UPDATE [SopDetails]
                  SET    ExpirationDate = @ExpirationDate,
@@ -235,17 +244,19 @@ namespace TecLogos.SOP.DAL.SOP
                  )
                  SELECT 
                      SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion,
-                     SD.ApprovalLevel, SD.ApprovalStatus, SD.EmployeeID, @ModifiedByID, GETDATE()
+                     SD.ApprovalLevel, SD.ApprovalStatus, SD.EmployeeID, CreatedByID, Created
                  FROM SopDetails SD
                  WHERE SD.ID = @SopID;
 
+                 DECLARE @CommentVersion INT = (SELECT TOP 1 Version FROM SopDetails WHERE ID = @SopID)
+                
                  INSERT INTO[Comment]
                  (
-                     ID, ReferenceID, CommentText, CreatedByID, Created
+                     ID, ReferenceID, CommentText, Version, CreatedByID, Created
                  )
                  VALUES
                  (
-                     NEWID(), @SopID, @CommentText, @ModifiedByID, GETDATE()
+                     NEWID(), @SopID, @CommentText, @CommentVersion, @ModifiedByID, GETDATE()
                  );
 
                  ";
@@ -310,11 +321,15 @@ namespace TecLogos.SOP.DAL.SOP
 
                 ExpirationDate = r.GetDateTime(r.GetOrdinal("ExpirationDate")),
 
+
                 SopDocument = r.IsDBNull(r.GetOrdinal("SopDocument"))
                     ? null
                     : r.GetString(r.GetOrdinal("SopDocument")),
 
                 SopDocumentVersion = r.GetInt32(r.GetOrdinal("SopDocumentVersion")),
+                //CommentText = r.IsDBNull(r.GetOrdinal("CommentText"))
+                //    ? null
+                //    : r.GetString(r.GetOrdinal("CommentText")),
 
                 ApprovalLevel = r.GetInt32(r.GetOrdinal("ApprovalLevel")),
                 
@@ -343,6 +358,8 @@ namespace TecLogos.SOP.DAL.SOP
                     ? null
                     : r.GetString(r.GetOrdinal("Comments")),
 
+                Version = r.GetInt32(r.GetOrdinal("Version")),
+
                 Created = r.GetDateTime(r.GetOrdinal("Created")),
 
                 CreatedBy = r.IsDBNull(r.GetOrdinal("CreatedBy"))
@@ -351,19 +368,33 @@ namespace TecLogos.SOP.DAL.SOP
             };
         }
 
-        private static SopComments MapComments(SqlDataReader r)
+        private static SopDetailHistory MapSopDetailHistory(SqlDataReader r)
         {
-            return new SopComments
+            return new SopDetailHistory
             {
-                CommentText = r.IsDBNull(r.GetOrdinal("CommentText"))
-                   ? null
-                   : r.GetString(r.GetOrdinal("CommentText")),
+                SopTitle = r.IsDBNull(r.GetOrdinal("SopTitle"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("SopTitle")),
 
-                Created = r.GetDateTime(r.GetOrdinal("Created")),
+                SopDocument = r.IsDBNull(r.GetOrdinal("SopDocument"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("SopDocument")),
+
+                CommentText = r.IsDBNull(r.GetOrdinal("CommentText"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("CommentText")),
+
+                Version = r.IsDBNull(r.GetOrdinal("Version"))
+                    ? 0   
+                    : r.GetInt32(r.GetOrdinal("Version")),
+
+                Created = r.IsDBNull(r.GetOrdinal("Created"))
+                    ? DateTime.MinValue
+                    : r.GetDateTime(r.GetOrdinal("Created")),
 
                 CreatedBy = r.IsDBNull(r.GetOrdinal("CreatedBy"))
-                   ? null
-                   : r.GetString(r.GetOrdinal("CreatedBy")),
+                    ? null
+                    : r.GetString(r.GetOrdinal("CreatedBy")),
             };
         }
 

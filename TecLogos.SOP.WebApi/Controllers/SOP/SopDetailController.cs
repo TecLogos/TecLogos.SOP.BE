@@ -143,7 +143,55 @@ namespace TecLogos.SOP.API.Controllers.SOP
             return Ok(new { success = true, message = "SOP deleted successfully." });
         }
 
-       private Guid GetUserId()
+        [HttpGet("{sopId:guid}/document")]
+        public async Task<IActionResult> DownloadDocument(Guid sopId)
+        {
+            try
+            {
+                var sop = await _bal.GetSopById(sopId);
+
+                if (sop == null || string.IsNullOrWhiteSpace(sop.SopDocument))
+                {
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "Document not found."
+                    });
+                }
+
+                var fullPath = Path.Combine(Directory.GetCurrentDirectory(), sop.SopDocument);
+
+                if (!System.IO.File.Exists(fullPath))
+                {
+                    _logger.LogWarning("File not found at path: {Path}", fullPath);
+
+                    return NotFound(new
+                    {
+                        success = false,
+                        message = "File does not exist on server."
+                    });
+                }
+
+                var fileName = Path.GetFileName(fullPath);
+
+                var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+                _logger.LogInformation("Serving SOP document {File} for SopId={SopId}", fileName, sopId);
+
+                return File(stream, "application/pdf", fileName);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error while downloading SOP document for SopId={SopId}", sopId);
+
+                return StatusCode(500, new
+                {
+                    success = false,
+                    message = "Error while downloading file."
+                });
+            }
+        }
+        private Guid GetUserId()
         {
             var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(claim))
