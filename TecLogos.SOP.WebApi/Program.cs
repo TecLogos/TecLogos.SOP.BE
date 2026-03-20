@@ -63,7 +63,6 @@ namespace TecLogos.SOP.WebApi
 
                 .CreateLogger();
 
-
             var builder = WebApplication.CreateBuilder(args);
             builder.Host.UseSerilog();
             var jwtSettings = builder.Configuration.GetSection("Jwt");

@@ -78,10 +78,10 @@ namespace TecLogos.SOP.DAL.Auth
             if (!await reader.ReadAsync())
                 return (null, "Invalid token");
 
-            var isUsed = GetBool(reader, "IsUsed");
+            var IsCompleted = GetBool(reader, "IsCompleted");
             var expiry = GetDateTime(reader, "ExpiryDate");
 
-            if (isUsed)
+            if (IsCompleted)
                 return (null, "Invite already used");
 
             if (expiry < DateTime.Now)
@@ -100,7 +100,7 @@ namespace TecLogos.SOP.DAL.Auth
                 var markCmd = new SqlCommand(
                     @"
                       UPDATE OnboardingInvites 
-                      SET IsUsed = 1, Modified = GETUTCDATE()
+                      SET IsCompleted = 1, Modified = GETUTCDATE()
                       WHERE Token = @Token
                      ", conn, tx);
 
@@ -146,7 +146,7 @@ namespace TecLogos.SOP.DAL.Auth
         {
             using var conn = await GetOpenConnectionAsync();
             using var cmd = new SqlCommand(
-                "UPDATE OnboardingInvites SET IsUsed=1 WHERE Token=@Token", conn);
+                "UPDATE OnboardingInvites SET IsCompleted=1 WHERE Token=@Token", conn);
 
             cmd.Parameters.AddWithValue("@Token", token);
             await cmd.ExecuteNonQueryAsync();

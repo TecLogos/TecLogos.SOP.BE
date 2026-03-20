@@ -31,20 +31,22 @@ namespace TecLogos.SOP.DAL.SOP
         {
             const string sql =
                 @"
-                  SELECT SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion, SD.Remark, SD.EmployeeID, WF.ApprovalLevel [NextApprovalLevel], SD.ApprovalLevel, SD.ApprovalStatus, SD.Version
+                    SELECT SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion, SD.Remark, SD.EmployeeID, WF.ApprovalLevel [NextApprovalLevel], SD.ApprovalLevel, WFL.StageName, ISNULL(WF.StageName, '') NextStageName, SD.ApprovalStatus, SD.Version
                   FROM [SopDetails] SD
                       INNER JOIN Employee EMP WITH(NOLOCK) ON EMP.ID = SD.EmployeeID AND EMP.IsDeleted = 0
                       INNER JOIN [SopDetailsWorkFlowSetUp] WF WITH(NOLOCK) ON  WF.ApprovalLevel = SD.ApprovalLevel + 1
+                      LEFT JOIN SopDetailsWorkFlowSetUp WFL WITH(NOLOCK) ON SD.ApprovalLevel = WFL.ApprovalLevel AND WFL.IsDeleted = 0
                    WHERE SD.IsDeleted = 0 AND WF.IsDeleted = 0
                       AND (WF.IsSupervisor = 1 AND EMP.ManagerID = @LoggedUserID)  --  Supervisors list
                   
                   UNION
                   
-                  SELECT SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion, SD.Remark, SD.EmployeeID, WF.ApprovalLevel [NextApprovalLevel], SD.ApprovalLevel, SD.ApprovalStatus, SD.Version
+                  SELECT SD.ID, SD.SopTitle, SD.ExpirationDate, SD.SopDocument, SD.SopDocumentVersion, SD.Remark, SD.EmployeeID, WF.ApprovalLevel [NextApprovalLevel], SD.ApprovalLevel, WFL.StageName, ISNULL(WF.StageName, '') NextStageName, SD.ApprovalStatus, SD.Version
                   FROM [SopDetails] SD
                       INNER JOIN [SopDetailsWorkFlowSetUp] WF WITH(NOLOCK) ON  WF.ApprovalLevel = SD.ApprovalLevel + 1
                       INNER JOIN EmployeeGroup EG ON EG.ID = WF.EmployeeGroupID
                       INNER JOIN EmployeeGroupDetail EGD ON EGD.EmployeeGroupID = EG.ID AND EGD.EmployeeID = @LoggedUserID AND EGD.IsDeleted = 0 
+                      LEFT JOIN SopDetailsWorkFlowSetUp WFL WITH(NOLOCK) ON SD.ApprovalLevel = WFL.ApprovalLevel AND WFL.IsDeleted = 0
                    WHERE SD.IsDeleted = 0 AND WF.IsDeleted = 0
                          AND (WF.IsSupervisor = 0 AND WF.EmployeeGroupID = EG.ID)  --  Approval group wise
                   ORDER BY ApprovalLevel";
@@ -75,7 +77,7 @@ namespace TecLogos.SOP.DAL.SOP
                   	FROM SopDetailsWorkFlowSetUp WF
                   WHERE  WF.IsDeleted = 0
                   
-                  --	ApprovalLevel
+                  -- ApprovalLevel
                   UPDATE SopDetails
                   SET ApprovalLevel = @NextApprovalLevel,
                   	ApprovalStatus = IIF(@NextApprovalLevel = @MaxApprovalLevel, 3, ApprovalStatus),
@@ -83,21 +85,21 @@ namespace TecLogos.SOP.DAL.SOP
                   	ModifiedByID = @ApproverID
                   WHERE ID = @ID
                 
-                 -- Update EmployeeID
-                    UPDATE SopDetails SET EmployeeID = @ApproverID WHERE ID = @ID           
+                  -- Update EmployeeID
+                  UPDATE SopDetails SET EmployeeID = @ApproverID WHERE ID = @ID           
                 
-                  --	Insert into SopDetailsApprovalHistory
-                    INSERT INTO [SopDetailsApprovalHistory]
-                          (ID, SopDetailsID, ApprovalLevel, ApprovalStatus,
-                              Comments, ReferenceVersion, CreatedByID, Created)
-                      SELECT
-                          NEWID(), @ID, @NextApprovalLevel,
-                          1,
-                          @Comments,
-                          SD.Version,
-                          @ApproverID, GETDATE()
-                      FROM [SopDetails] SD
-                      WHERE SD.ID = @ID;";
+                  -- Insert into SopDetailsApprovalHistory
+                  INSERT INTO [SopDetailsApprovalHistory]
+                        (ID, SopDetailsID, ApprovalLevel, ApprovalStatus,
+                            Comments, ReferenceVersion, CreatedByID, Created)
+                  SELECT
+                        NEWID(), @ID, @NextApprovalLevel,
+                        1,
+                        @Comments,
+                        SD.Version,
+                        @ApproverID, GETDATE()
+                  FROM [SopDetails] SD
+                  WHERE SD.ID = @ID;";
 
             using var conn = CreateConnection();
             await conn.OpenAsync();
@@ -156,27 +158,33 @@ namespace TecLogos.SOP.DAL.SOP
          => new()
          {
              ID = r.GetGuid(r.GetOrdinal("ID")),
-             SopTitle = ReadString(r, "SopTitle"),
-             ExpirationDate = ReadDateTime(r, "ExpirationDate"),
-             SopDocument = ReadString(r, "SopDocument"),
+             SopTitle = r.IsDBNull(r.GetOrdinal("SopTitle"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("SopTitle")),
+             ExpirationDate = r.GetDateTime(r.GetOrdinal("ExpirationDate")),
+             SopDocument = r.IsDBNull(r.GetOrdinal("SopDocument"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("SopDocument")),
+
              SopDocumentVersion = r.GetInt32(r.GetOrdinal("SopDocumentVersion")),
-             Remark = ReadString(r, "Remark"),
+
+             Remark = r.IsDBNull(r.GetOrdinal("Remark"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("Remark")),
              ApprovalLevel = r.GetInt32(r.GetOrdinal("ApprovalLevel")),
              NextApprovalLevel = r.GetInt32(r.GetOrdinal("NextApprovalLevel")),
+             StageName = r.GetString(r.GetOrdinal("StageName")),
+             NextStageName = r.GetString(r.GetOrdinal("NextStageName")),
              ApprovalStatus = ReadEnum<SopApprovalStatus>(r, "ApprovalStatus")
             
          };
-
-        private static string? ReadString(SqlDataReader r, string col) { var o = r.GetOrdinal(col); return r.IsDBNull(o) ? null : r.GetString(o); }
-        private static DateTime? ReadDateTime(SqlDataReader r, string col) { var o = r.GetOrdinal(col); return r.IsDBNull(o) ? null : r.GetDateTime(o); }
-        private static int? ReadInt(SqlDataReader r, string col) { var o = r.GetOrdinal(col); return r.IsDBNull(o) ? null : r.GetInt32(o); }
 
         private static T? ReadEnum<T>(SqlDataReader r, string col) where T : struct, Enum
         {
             var o = r.GetOrdinal(col);
             if (r.IsDBNull(o)) return null;
-            var intValue = r.GetInt32(o);       // step 1: unbox to int
-            return (T)(object)intValue;          // step 2: int → enum (T? wraps implicitly)
+            var intValue = r.GetInt32(o);     
+            return (T)(object)intValue;       
         }
 
     }

@@ -55,8 +55,28 @@ namespace TecLogos.SOP.BAL.SOP
                 Remark = sop.Remark,
                 ApprovalLevel = sop.ApprovalLevel,
                 NextApprovalLevel = sop.NextApprovalLevel,
-                ApprovalStatus = sop.ApprovalStatus
+                ApprovalStatus = sop.ApprovalStatus,
+                SopApprovalHistoryResponseList = getSopApprovalHistory(sop),
+
             };
+        }
+
+        private List<SopApprovalHistoryResponse> getSopApprovalHistory(SopDetail sop)
+        {
+            List<SopApprovalHistoryResponse> items = new();
+            foreach (var item in sop.SopApprovalHistoryList)
+            {
+                SopApprovalHistoryResponse wItem = new()
+                {
+                    StageName = item.StageName,
+                    ApprovalStatus = item.ApprovalStatus,
+                    Comments = item.Comments,
+                    Created = item.Created,
+                    CreatedBy = item.CreatedBy
+                };
+                items.Add(wItem);
+            }
+            return items;
         }
 
         public async Task<Guid> CreateSop(CreateSopRequest request, Guid userId, Guid sopId, string? documentPath)
@@ -64,7 +84,7 @@ namespace TecLogos.SOP.BAL.SOP
             if (string.IsNullOrWhiteSpace(request.SopTitle))
                 throw new Exception("SOP Title is required.");
 
-            if (request.ExpirationDate.HasValue && request.ExpirationDate.Value <= DateTime.UtcNow)
+            if (request.ExpirationDate <= DateTime.UtcNow)
                 throw new Exception("Expiration date must be future.");
 
             var dm = new DataModel.SOP.SopDetail
@@ -167,10 +187,22 @@ namespace TecLogos.SOP.BAL.SOP
                Remark = d.Remark,
                ApprovalLevel = d.ApprovalLevel,
                NextApprovalLevel = d.NextApprovalLevel,
-               ApprovalStatus = d.ApprovalStatus
+               ApprovalStatus = d.ApprovalStatus,
+               StageName = d.StageName,
+               NextStageName = d.NextStageName,
+               Created = d.Created,
+               CreatedByID = d.CreatedByID,
 
            };
 
-
+        private static SopApprovalHistoryResponse SopHistoryToResponse(DataModel.SOP.SopApprovalHistory d)
+           => new()
+           {
+              ApprovalStatus = d.ApprovalStatus,
+              StageName = d.StageName,
+              Comments = d.Comments,
+              Created = d.Created,
+              CreatedBy = d.CreatedBy
+           };
     }
 }

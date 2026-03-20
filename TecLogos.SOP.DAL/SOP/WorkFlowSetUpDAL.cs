@@ -30,12 +30,9 @@ namespace TecLogos.SOP.DAL.SOP
 
         private SqlConnection CreateConnection() => new(_connectionString);
 
-        // ── GET ALL ──────────────────────────────────────────────────────────
-        // Joins EmployeeGroup to return GroupName alongside each stage.
-        // Supervisor stage has NULL EmployeeGroupID — LEFT JOIN handles this.
+    
         public async Task<List<WorkFlowSetUp>> GetAll()
         {
-            // Note: We return the raw DataModel here; BAL maps GroupName separately.
             const string sql = @"
                 SELECT
                     WF.ID,
@@ -52,7 +49,7 @@ namespace TecLogos.SOP.DAL.SOP
                     WF.ModifiedByID
                 FROM  [SopDetailsWorkFlowSetUp] WF
                 WHERE WF.IsDeleted = 0
-                ORDER BY WF.ApprovalLevel ASC;";
+                ORDER BY WF.ApprovalLevel;";
 
             using var conn = CreateConnection();
             await conn.OpenAsync();

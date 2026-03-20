@@ -11,7 +11,7 @@ namespace TecLogos.SOP.EnumsAndConstants
         ReturnedForChanges = 5
     }
 
-
+    /*
     public enum SopApprovalLevel
     {
         NotStarted = 0,
@@ -46,4 +46,5 @@ namespace TecLogos.SOP.EnumsAndConstants
         GroupReview = 0,   // IsSupervisor = 0 (Admin/Initiator/L1/L2/L3)
         SupervisorReview = 1    // IsSupervisor = 1 (Submitted stage only)
     }
+    */
 }

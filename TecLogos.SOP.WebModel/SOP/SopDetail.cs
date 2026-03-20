@@ -6,9 +6,9 @@ namespace TecLogos.SOP.WebModel.SOP
 {
     public class CreateSopRequest
     {
-        public string? SopTitle { get; set; }
-        public DateTime? ExpirationDate { get; set; }
-        public string? Remark { get; set; }
+        public string SopTitle { get; set; }
+        public DateTime ExpirationDate { get; set; }
+        public string Remark { get; set; }
         public IFormFile? DocumentFile { get; set; }
     }
 
@@ -28,13 +28,15 @@ namespace TecLogos.SOP.WebModel.SOP
 
     public class SopDetailResponse : BaseModel
     {
-        public string? SopTitle { get; set; }
-        public DateTime? ExpirationDate { get; set; }
-        public string? SopDocument { get; set; }
+        public string SopTitle { get; set; }
+        public DateTime ExpirationDate { get; set; }
+        public string SopDocument { get; set; }
         public int SopDocumentVersion { get; set; }
-        public string? Remark { get; set; }
+        public string Remark { get; set; }
         public int ApprovalLevel { get; set; }
         public int NextApprovalLevel { get; set; }
+        public string StageName { get; set; }
+        public string NextStageName { get; set; }
         public SopApprovalStatus? ApprovalStatus { get; set; }
         public string ApprovalStatusLabel => ApprovalStatus switch
         {
@@ -47,27 +49,17 @@ namespace TecLogos.SOP.WebModel.SOP
             null => "Unknown",
             _ => "Unknown"
         };
+
+        public List<SopApprovalHistoryResponse> SopApprovalHistoryResponseList { get; set; }
     }
 
     public class SopApprovalHistoryResponse
     {
-        public Guid SopDetailsID { get; set; }
-        public string? SopTitle { get; set; }
-        public DateTime? ExpirationDate { get; set; }
-        public string? SopDocument { get; set; }
-        public string Remark { get; set; }
-
-        // From [SopDetailsApprovalHistory]
-        public int ApprovalLevel { get; set; }
-        public SopApprovalStatus ApprovalStatus { get; set; }
-        public string? Comments { get; set; }
-        public DateTime ActionedOn { get; set; }  // AH.Created — always set
-        public string? ApprovalStatusLabel => ApprovalStatus switch
-        {
-            SopApprovalStatus.Approved => "Approved",
-            SopApprovalStatus.Rejected => "Rejected",
-            _ => "Pending"
-        };
+        public int ApprovalStatus { get; set; }
+        public string StageName { get; set; }
+        public string Comments { get; set; }
+        public DateTime Created { get; set; }
+        public string CreatedBy { get; set; }
     }
 
     public class SopListResponse

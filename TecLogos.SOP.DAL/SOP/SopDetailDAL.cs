@@ -1,7 +1,9 @@
-using System.Data;
 using Microsoft.Data.SqlClient;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.VisualBasic;
+using System.Data;
+using System.Security.Cryptography.X509Certificates;
 using TecLogos.SOP.DataModel.SOP;
 using TecLogos.SOP.EnumsAndConstants;
 
@@ -43,17 +45,28 @@ namespace TecLogos.SOP.DAL.SOP
                     SD.SopDocumentVersion,
                     SD.Remark,
                     SD.ApprovalLevel,
+                    WF.StageName,
+                    ISNULL(WFN.StageName, '') NextStageName,
                     SD.ApprovalStatus,
                     SD.Version,
                     SD.IsActive,
                     SD.IsDeleted,
                     SD.Created,
                     SD.CreatedByID
-                FROM  [SopDetails] SD
+                FROM  [SopDetails] SD WITH(NOLOCK)
+                    LEFT JOIN SopDetailsWorkFlowSetUp WF WITH(NOLOCK) ON SD.ApprovalLevel = WF.ApprovalLevel AND WF.IsDeleted = 0
+                    LEFT JOIN SopDetailsWorkFlowSetUp WFN WITH(NOLOCK) ON SD.ApprovalLevel + 1 = WFN.ApprovalLevel AND WFN.IsDeleted = 0
                 WHERE SD.IsDeleted = 0
                   AND (@ApprovalStatus IS NULL OR SD.ApprovalStatus = @ApprovalStatus)
                   AND (@Year         IS NULL OR YEAR(SD.Created)   = @Year)
-                ORDER BY SD.Created DESC;";
+                ORDER BY SD.Created
+                
+                IF EXISTS (SELECT 1 FROM SopDetails WITH(NOLOCK) WHERE CONVERT(DATE, ExpirationDate) < CONVERT(DATE, GETDATE()))
+                BEGIN
+                	UPDATE SopDetails
+                	SET ApprovalStatus = 4
+                	WHERE CONVERT(DATE, ExpirationDate) < CONVERT(DATE, GETDATE()) 
+                END";
 
             using var conn = CreateConnection();
             await conn.OpenAsync();
@@ -65,14 +78,24 @@ namespace TecLogos.SOP.DAL.SOP
             var list = new List<SopDetail>();
             using var reader = await cmd.ExecuteReaderAsync();
             while (await reader.ReadAsync())
-                list.Add(MapSopDetail(reader, levelColumn: "ApprovalLevel"));
+            {
+                SopDetail item = MapSopDetail(reader);
+                item.StageName = reader.IsDBNull(reader.GetOrdinal("StageName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("StageName"));
+                item.NextStageName = reader.IsDBNull(reader.GetOrdinal("NextStageName"))
+                    ? null
+                    : reader.GetString(reader.GetOrdinal("NextStageName"));
+                list.Add(item);
+            }
 
             return (list.Count, list);
         }
         public async Task<(SopDetail? sop, int documentVersion)> GetSopById(Guid sopId)
         {
             const string sql = @"
-                              SELECT
+
+ SELECT
                                   SD.ID,
                                   SD.SopTitle,
                                   SD.ExpirationDate,
@@ -88,7 +111,15 @@ namespace TecLogos.SOP.DAL.SOP
                                   SD.CreatedByID
                               FROM [SopDetails] SD
                               WHERE SD.ID = @SopID
-                                AND SD.IsDeleted = 0;";
+                                AND SD.IsDeleted = 0
+                              
+SELECT SDAH.ID, SDAH.ApprovalStatus, WF.StageName, SDAH.Comments, SDAH.Created, EMP.FirstName + ' ' + EMP.LastName [CreatedBy]
+FROM SopDetailsApprovalHistory SDAH WITH(NOLOCK)
+	INNER JOIN Employee EMP WITH(NOLOCK) ON EMP.ID = SDAH.CreatedByID
+	INNER JOIN SopDetailsWorkFlowSetUp WF WITH(NOLOCK) ON WF.ApprovalLevel = SDAH.ApprovalLevel
+WHERE SDAH.SopDetailsID = @SopID
+ORDER BY SDAH.Created
+                                ";
 
             using var conn = CreateConnection();
             await conn.OpenAsync();
@@ -98,18 +129,29 @@ namespace TecLogos.SOP.DAL.SOP
 
             using var reader = await cmd.ExecuteReaderAsync();
 
+            SopDetail sop = null;
+            int docVersion = 0;
+
+
             if (await reader.ReadAsync())
             {
-                var sop = MapSopDetail(reader, levelColumn: "ApprovalLevel");
+                 sop = MapSopDetail(reader);
 
-                // 👇 This is your version
-                var docVersion = reader.GetInt32(reader.GetOrdinal("SopDocumentVersion"));
+                docVersion = reader.GetInt32(reader.GetOrdinal("SopDocumentVersion"));
 
-                return (sop, docVersion);
             }
 
-            return (null, 0);
-        }
+            
+           await reader.NextResultAsync();
+            sop.SopApprovalHistoryList = [];
+            while (await reader.ReadAsync())
+            {
+                sop.SopApprovalHistoryList.Add(MapApprovalHistory(reader));
+            }
+
+
+            return (sop, docVersion);
+        } 
         public async Task<Guid> CreateSop(SopDetail sop)
         {
             const string sql = @"
@@ -149,8 +191,8 @@ namespace TecLogos.SOP.DAL.SOP
         {
             const string sql =
                 @"
-        UPDATE [SopDetails]
-        SET    ExpirationDate = @ExpirationDate,
+               UPDATE [SopDetails]
+               SET    ExpirationDate = @ExpirationDate,
                Remark         = @Remark,
                Modified       = GETDATE(),
                ModifiedByID   = @ModifiedByID,
@@ -168,9 +210,7 @@ namespace TecLogos.SOP.DAL.SOP
                         ELSE SopDocument
                     END
 
-        WHERE ID = @SopID
-          AND IsDeleted = 0;
-        ";
+                 WHERE ID = @SopID;";
 
             using var conn = CreateConnection();
             await conn.OpenAsync();
@@ -211,29 +251,54 @@ namespace TecLogos.SOP.DAL.SOP
         }
 
 
-        private static SopDetail MapSopDetail(SqlDataReader r, string levelColumn)
-            => new()
+        private static SopDetail MapSopDetail(SqlDataReader r)
+        {
+            return new SopDetail
             {
                 ID = r.GetGuid(r.GetOrdinal("ID")),
-                SopTitle = ReadString(r, "SopTitle"),
-                ExpirationDate = ReadDateTime(r, "ExpirationDate"),
-                SopDocument = ReadString(r, "SopDocument"),
+
+                SopTitle = r.IsDBNull(r.GetOrdinal("SopTitle"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("SopTitle")),
+
+                ExpirationDate = r.GetDateTime(r.GetOrdinal("ExpirationDate")),
+
+                SopDocument = r.IsDBNull(r.GetOrdinal("SopDocument"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("SopDocument")),
+
                 SopDocumentVersion = r.GetInt32(r.GetOrdinal("SopDocumentVersion")),
-                Remark = ReadString(r, "Remark"),
-                ApprovalLevel = ReadInt(r, levelColumn) ?? 0,
+
+                Remark = r.IsDBNull(r.GetOrdinal("Remark"))
+                    ? null
+                    : r.GetString(r.GetOrdinal("Remark")),
+
+                ApprovalLevel = r.GetInt32(r.GetOrdinal("ApprovalLevel")),
+                
+
                 ApprovalStatus = ReadEnum<SopApprovalStatus>(r, "ApprovalStatus"),
+
                 Version = r.GetInt32(r.GetOrdinal("Version")),
                 IsActive = r.GetBoolean(r.GetOrdinal("IsActive")),
                 IsDeleted = r.GetBoolean(r.GetOrdinal("IsDeleted")),
                 Created = r.GetDateTime(r.GetOrdinal("Created")),
                 CreatedByID = r.GetGuid(r.GetOrdinal("CreatedByID"))
             };
+        }
 
-        private static string? ReadString(SqlDataReader r, string col) { var o = r.GetOrdinal(col); return r.IsDBNull(o) ? null : r.GetString(o); }
-        private static DateTime? ReadDateTime(SqlDataReader r, string col) { var o = r.GetOrdinal(col); return r.IsDBNull(o) ? null : r.GetDateTime(o); }
-        private static int? ReadInt(SqlDataReader r, string col) { var o = r.GetOrdinal(col); return r.IsDBNull(o) ? null : r.GetInt32(o); }
+        private static SopApprovalHistory MapApprovalHistory(SqlDataReader r)
+        {
+            return new SopApprovalHistory
+            {
+                ApprovalStatus = r.GetInt32(r.GetOrdinal("ApprovalStatus")),
+                StageName = r.GetString(r.GetOrdinal("StageName")),
+                Comments = r.GetString(r.GetOrdinal("Comments")),
+                Created = r.GetDateTime(r.GetOrdinal("Created")),
+                CreatedBy = r.GetString(r.GetOrdinal("CreatedBy")),
+            };
+        }
 
-       private static T? ReadEnum<T>(SqlDataReader r, string col) where T : struct, Enum
+        private static T? ReadEnum<T>(SqlDataReader r, string col) where T : struct, Enum
         {
             var o = r.GetOrdinal(col);
             if (r.IsDBNull(o)) return null;

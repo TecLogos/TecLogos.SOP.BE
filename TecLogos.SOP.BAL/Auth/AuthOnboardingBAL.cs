@@ -43,36 +43,75 @@ namespace TecLogos.SOP.BAL.Auth
             var email = await _repo.GetEmployeeEmail(employeeId);
 
             var link = $"http://localhost:5173/set-password?token={token}";
+            var body = $@"
+                         <html>
+                         <body style='font-family: Arial, sans-serif; line-height:1.6; color:#333;'>
+                         
+                             <h2 style='color:#2c3e50;'>Welcome to TecLogos SOP 🎉</h2>
+                         
+                             <p>Hello,</p>
+                         
+                             <p>
+                                 Your employee account has been successfully created in the <b>TecLogos SOP system</b>.
+                             </p>
+                         
+                             <p>
+                                 To activate your account and set your password, click the button below:
+                             </p>
+                         
+                             <p style='text-align:center; margin: 20px 0;'>
+                                 <a href='{link}' 
+                                    style='background-color:#007bff; color:#fff; padding:12px 20px; 
+                                           text-decoration:none; border-radius:5px; display:inline-block;'>
+                                     Set Your Password
+                                 </a>
+                             </p>
+                         
+                             <p>
+                                 Or copy and paste this link in your browser:
+                                 <br/>
+                                 <a href='{link}'>{link}</a>
+                             </p>
+                         
+                             <p style='color:#e74c3c;'>
+                                 ⚠ This link will expire in 48 hours for security reasons.
+                             </p>
+                         
+                             <hr/>
+                         
+                             <p>
+                                 After setting your password, you can log in using:
+                                 <ul>
+                                     <li>Your official email address</li>
+                                     <li>The password you create during onboarding</li>
+                                 </ul>
+                             </p>
+                         
+                             <p>
+                                 If you did not expect this email, please contact the HR team immediately.
+                             </p>
+                         
+                             <p>
+                                 We are excited to have you onboard and wish you a great journey with TecLogos!
+                             </p>
+                         
+                             <br/>
+                         
+                             <p>
+                                 Best regards,<br/>
+                                 <b>SOP Team</b><br/>
+                                 TecLogos
+                             </p>
+                         
+                         </body>
+                         </html>";
+
 
             await _emailBAL.SendEmailAsync(
-                email,
-                "Welcome to TecLogos SOP – Set Your Password",
-                $@"
-            Hello,
-            
-            Welcome to TecLogos! 🎉
-            
-            Your employee account has been successfully created in the TecLogos SOP.
-            
-            To activate your account and set your password, please click the secure link below:
-            
-            {link}
-            
-            This link will expire in 48 hours for security reasons.
-            
-            After setting your password, you can log in to the SOP using:
-            • Your official email address
-            • The password you create during onboarding
-            
-            If you did not expect this email, please contact the HR team immediately.
-            
-            We are excited to have you onboard and wish you a great journey with TecLogos!
-            
-            Best regards,  
-            SOP Team  
-            TecLogos
-            ");
-
+                 email,
+                 "Welcome to TecLogos SOP – Set Your Password",
+                 body
+             );
             _logger.LogInformation("Onboarding invite sent to {Email}", email);
         }
 

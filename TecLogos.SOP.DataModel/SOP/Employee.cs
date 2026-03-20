@@ -31,7 +31,6 @@ namespace TecLogos.SOP.DataModel.SOP
     {
         public Guid EmployeeGroupID { get; set; }
         public Guid EmployeeID { get; set; }
-
         public string GroupName { get; set; }
         public string? EmployeeName { get; set; }   // ✅ nullable
         public string? Email { get; set; }          // ✅ nullable

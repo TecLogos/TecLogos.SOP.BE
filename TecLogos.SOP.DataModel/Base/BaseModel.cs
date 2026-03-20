@@ -6,8 +6,8 @@
         public int Version { get; set; }
         public bool IsActive { get; set; }
         public bool IsDeleted { get; set; }
-        public DateTime? Created { get; set; }
-        public Guid? CreatedByID { get; set; }
+        public DateTime Created { get; set; }
+        public Guid CreatedByID { get; set; }
         public DateTime? Deleted { get; set; }
         public Guid? DeletedByID { get; set; }
         public DateTime? Modified { get; set; }

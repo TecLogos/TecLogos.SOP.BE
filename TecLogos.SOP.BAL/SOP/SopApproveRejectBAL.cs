@@ -69,7 +69,9 @@ namespace TecLogos.SOP.BAL.SOP
          Remark = d.Remark,
          ApprovalLevel = d.ApprovalLevel,
          NextApprovalLevel = d.NextApprovalLevel,
-         ApprovalStatus = d.ApprovalStatus
+            StageName = d.StageName,
+            NextStageName = d.NextStageName,
+            ApprovalStatus = d.ApprovalStatus
 
      };
 
